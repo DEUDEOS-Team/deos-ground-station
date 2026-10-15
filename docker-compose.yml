@@ -21,11 +21,16 @@ services:
       dockerfile: services/linker/Dockerfile
     container_name: deos_linker
     restart: unless-stopped
+    privileged: true
+    devices:
+      - "/dev/ttyUSB0:/dev/ttyUSB0"
+    group_add:
+      - dialout
     environment:
       - MQTT_BROKER=mosquitto
       - MQTT_PORT=1883
       - SERIAL_PORT=/dev/ttyUSB0
-      - BAUD_RATE=115200
+      - BAUD_RATE=9600
       - ACK_TIMEOUT_MS=600
       - MAX_RETRIES=3
     depends_on:
