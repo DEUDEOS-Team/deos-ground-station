@@ -1,0 +1,88 @@
+"""DEOS Core Protocol Package (v1.1 Master).
+
+Media-independent transport framing, CRC16-CCITT, registries, enums, models, and scaling.
+"""
+
+from .enums import (
+    NodeId,
+    Priority,
+    MessageClass,
+    ServiceId,
+    State,
+    Mode,
+    ResultCode,
+    SystemCommand,
+    TractionCommand,
+    SteeringCommand,
+    BrakeCommand,
+    BmsCommand,
+    DiagnosticCommand,
+    LightingCommand,
+    ConfigCommand,
+    LightId,
+    LightState,
+    LoraFlag,
+    FaultSeverity,
+    FaultState,
+    DEOS_VERSION,
+    LORA_MAGIC,
+    END_OF_FAULT_LIST,
+    END_OF_LIST,
+    DEOS_INTERVAL_ON_CHANGE,
+)
+from .crc import crc16_ccitt
+from .framing import (
+    UniversalDeosFrame,
+    wrap_lora_packet,
+    create_lora_ack,
+    unwrap_lora_stream,
+)
+from .scaling import to_physical, to_raw, SIGNALS
+from .registry import (
+    get_fault_info,
+    get_parameter_info,
+    list_parameters,
+    FaultInfo,
+    ParameterInfo,
+)
+
+__all__ = [
+    "NodeId",
+    "Priority",
+    "MessageClass",
+    "ServiceId",
+    "State",
+    "Mode",
+    "ResultCode",
+    "SystemCommand",
+    "TractionCommand",
+    "SteeringCommand",
+    "BrakeCommand",
+    "BmsCommand",
+    "DiagnosticCommand",
+    "LightingCommand",
+    "ConfigCommand",
+    "LightId",
+    "LightState",
+    "LoraFlag",
+    "FaultSeverity",
+    "FaultState",
+    "DEOS_VERSION",
+    "LORA_MAGIC",
+    "END_OF_FAULT_LIST",
+    "END_OF_LIST",
+    "DEOS_INTERVAL_ON_CHANGE",
+    "crc16_ccitt",
+    "UniversalDeosFrame",
+    "wrap_lora_packet",
+    "create_lora_ack",
+    "unwrap_lora_stream",
+    "to_physical",
+    "to_raw",
+    "SIGNALS",
+    "get_fault_info",
+    "get_parameter_info",
+    "list_parameters",
+    "FaultInfo",
+    "ParameterInfo",
+]
