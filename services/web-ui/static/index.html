@@ -318,8 +318,21 @@
                         </div>
 
                         <div class="card">
-                            <div class="card-header"><i class="fa-solid fa-traffic-light me-2"></i>Global State & Mode Switch</div>
+                            <div class="card-header"><i class="fa-solid fa-traffic-light me-2"></i>State & Mode Switch</div>
                             <div class="card-body">
+                                <div class="mb-3">
+                                    <label class="form-label text-secondary small">Target Node</label>
+                                    <select id="stateTargetNodeSelect" class="form-select form-select-sm bg-dark text-light border-secondary">
+                                        <option value="3" selected>0x03 - Main STM32 (VCU/Router)</option>
+                                        <option value="255">0xFF - Global Broadcast (All Nodes)</option>
+                                        <option value="16">0x10 - Traction ECU</option>
+                                        <option value="17">0x11 - Steering ECU</option>
+                                        <option value="18">0x12 - Brake ECU</option>
+                                        <option value="32">0x20 - BMS Main</option>
+                                        <option value="33">0x21 - BMS Aux</option>
+                                    </select>
+                                </div>
+
                                 <label class="form-label text-secondary">Set Target State (0x02)</label>
                                 <div class="btn-group w-100 mb-3" role="group">
                                     <button class="btn btn-outline-warning btn-sm" onclick="sendSetState(1)">STANDBY</button>

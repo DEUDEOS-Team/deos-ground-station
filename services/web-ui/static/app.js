@@ -352,8 +352,10 @@ function sendGetNodeInfo() {
 }
 
 function sendSetState(targetState) {
+    const targetSelect = document.getElementById("stateTargetNodeSelect");
+    const dest = targetSelect ? parseInt(targetSelect.value) : 0x03;
     postCommand({
-        destination: 0xFF,
+        destination: dest,
         service: 0x00,
         command: 0x02,
         ack: true,
@@ -362,8 +364,10 @@ function sendSetState(targetState) {
 }
 
 function sendSetMode(targetMode) {
+    const targetSelect = document.getElementById("stateTargetNodeSelect");
+    const dest = targetSelect ? parseInt(targetSelect.value) : 0x03;
     postCommand({
-        destination: 0xFF,
+        destination: dest,
         service: 0x00,
         command: 0x04,
         ack: true,
