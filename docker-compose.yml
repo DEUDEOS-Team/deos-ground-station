@@ -30,8 +30,8 @@ services:
       - MQTT_BROKER=mosquitto
       - MQTT_PORT=1883
       - SERIAL_PORT=/dev/ttyUSB0
-      - BAUD_RATE=9600
-      - ACK_TIMEOUT_MS=600
+      - BAUD_RATE=115200
+      - ACK_TIMEOUT_MS=1200
       - MAX_RETRIES=3
     depends_on:
       - mosquitto

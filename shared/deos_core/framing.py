@@ -8,6 +8,7 @@ Provides:
    - [0xAA 0x55] [Flag] [Length] [Payload / Saf DEOS Frame] [CRC16-CCITT (2B LE)]
 """
 
+import logging
 import os
 import struct
 from dataclasses import dataclass, field
@@ -15,6 +16,8 @@ from typing import List, Tuple, Union
 
 from .crc import crc16_ccitt
 from .enums import DEOS_VERSION, LORA_MAGIC, LoraFlag
+
+logger = logging.getLogger("deos.framing")
 
 
 DEFAULT_FRAME_LAYOUT = os.getenv("DEOS_FRAME_LAYOUT", "UNIVERSAL_9B")
@@ -226,7 +229,10 @@ def unwrap_lora_stream(
         rx_crc = int.from_bytes(raw_packet[-2:], byteorder="little")
 
         if calc_crc != rx_crc:
-            # Corrupted packet, discard and search next
+            logger.warning(
+                "Corrupted LoRa frame dropped! Flag=0x%02X Length=%d CalcCRC=0x%04X != RxCRC=0x%04X (Raw: %s)",
+                flag, length, calc_crc, rx_crc, raw_packet.hex()
+            )
             continue
 
         payload_bytes = raw_packet[4:-2]

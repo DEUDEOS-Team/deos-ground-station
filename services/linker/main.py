@@ -39,9 +39,10 @@ MQTT_BROKER = os.getenv("MQTT_BROKER", "mosquitto")
 MQTT_PORT = int(os.getenv("MQTT_PORT", "1883"))
 SERIAL_PORT = os.getenv("SERIAL_PORT", "/dev/ttyUSB0")
 BAUD_RATE = int(os.getenv("BAUD_RATE", "9600"))
-ACK_TIMEOUT_MS = int(os.getenv("ACK_TIMEOUT_MS", "600"))
+ACK_TIMEOUT_MS = int(os.getenv("ACK_TIMEOUT_MS", "1200"))
 MAX_RETRIES = int(os.getenv("MAX_RETRIES", "3"))
 SERIAL_MOCK = os.getenv("SERIAL_MOCK", "false").lower() in ("true", "1", "yes")
+MOCK_AUTO_ACK = os.getenv("MOCK_AUTO_ACK", "true").lower() in ("true", "1", "yes")
 
 
 class PendingARQ:
@@ -123,13 +124,24 @@ class LinkerService:
                 try:
                     self.ser.write(data)
                     self.ser.flush()
+                    logger.info("UART TX (%d bytes): %s", len(data), data.hex())
                     return
                 except Exception as e:
                     logger.error("Failed writing to serial: %s", e)
             elif self.is_mock:
-                logger.debug("[MOCK SERIAL] Wrote %d bytes: %s", len(data), data.hex())
+                logger.info("[MOCK SERIAL] Wrote %d bytes: %s", len(data), data.hex())
+                if MOCK_AUTO_ACK and len(data) >= 6 and data[2] == LoraFlag.ACK_REQ:
+                    packet_crc = int.from_bytes(data[-2:], "little")
+                    threading.Timer(0.1, self._simulate_mock_ack, args=[packet_crc]).start()
             else:
                 logger.warning("Serial port is not open; dropped %d bytes", len(data))
+
+    def _simulate_mock_ack(self, packet_crc: int):
+        logger.info("[MOCK SERIAL] Simulating vehicle ACK response for CRC=0x%04X...", packet_crc)
+        ack_wire = create_lora_ack(packet_crc)
+        packets = unwrap_lora_stream(bytearray(ack_wire))
+        for flag, length, payload_bytes, rx_crc in packets:
+            self.handle_incoming_packet(flag, length, payload_bytes, rx_crc)
 
     def handle_incoming_packet(self, flag: int, length: int, payload_bytes: bytes, rx_crc: int):
         """Process verified incoming packet from LoRa UART."""
@@ -256,6 +268,7 @@ class LinkerService:
             try:
                 incoming = self.ser.read(self.ser.in_waiting or 1)
                 if incoming:
+                    logger.info("UART RX (%d bytes): %s", len(incoming), incoming.hex())
                     self.rx_buffer.extend(incoming)
                     packets = unwrap_lora_stream(self.rx_buffer)
                     for flag, length, payload_bytes, rx_crc in packets:
