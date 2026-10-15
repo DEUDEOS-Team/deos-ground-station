@@ -44,6 +44,9 @@ from .registry import (
     list_parameters,
     FaultInfo,
     ParameterInfo,
+    PARAMETERS,
+    COMMON_FAULTS,
+    NODE_FAULTS,
 )
 
 __all__ = [
@@ -85,4 +88,7 @@ __all__ = [
     "list_parameters",
     "FaultInfo",
     "ParameterInfo",
+    "PARAMETERS",
+    "COMMON_FAULTS",
+    "NODE_FAULTS",
 ]

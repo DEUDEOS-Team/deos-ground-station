@@ -1,0 +1,998 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DEOS Ground Control Station | Universal Transport v1.1</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --deos-bg: #0d1117;
+            --deos-card: #161b22;
+            --deos-border: #30363d;
+            --deos-accent: #00d2ff;
+            --deos-accent-glow: rgba(0, 210, 255, 0.25);
+            --deos-success: #2ea043;
+            --deos-warning: #d29922;
+            --deos-danger: #f85149;
+            --deos-text: #c9d1d9;
+            --deos-text-dim: #8b949e;
+        }
+
+        body {
+            background-color: var(--deos-bg);
+            color: var(--deos-text);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding-bottom: 40px;
+        }
+
+        .navbar {
+            background-color: #0b0e14;
+            border-bottom: 1px solid var(--deos-border);
+        }
+        .navbar-brand {
+            font-weight: 700;
+            letter-spacing: 1px;
+            color: #fff;
+        }
+        .navbar-brand span {
+            color: var(--deos-accent);
+        }
+
+        .badge-status-online {
+            background-color: rgba(46, 160, 67, 0.2);
+            color: #3fb950;
+            border: 1px solid #238636;
+        }
+        .badge-status-offline {
+            background-color: rgba(248, 81, 73, 0.2);
+            color: #f85149;
+            border: 1px solid #da3633;
+        }
+
+        .nav-tabs {
+            border-bottom: 1px solid var(--deos-border);
+        }
+        .nav-tabs .nav-link {
+            color: var(--deos-text-dim);
+            border: 1px solid transparent;
+            font-weight: 500;
+            padding: 10px 18px;
+        }
+        .nav-tabs .nav-link:hover {
+            border-color: transparent;
+            color: #fff;
+        }
+        .nav-tabs .nav-link.active {
+            background-color: var(--deos-card);
+            border-color: var(--deos-border) var(--deos-border) var(--deos-card);
+            color: var(--deos-accent);
+        }
+
+        .card {
+            background-color: var(--deos-card);
+            border: 1px solid var(--deos-border);
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .card-header {
+            background-color: rgba(255, 255, 255, 0.02);
+            border-bottom: 1px solid var(--deos-border);
+            font-weight: 600;
+            color: #fff;
+        }
+
+        .metric-box {
+            background: rgba(0, 0, 0, 0.25);
+            border: 1px solid var(--deos-border);
+            border-radius: 6px;
+            padding: 12px;
+            text-align: center;
+        }
+        .metric-title {
+            font-size: 0.8rem;
+            color: var(--deos-text-dim);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .metric-value {
+            font-size: 1.6rem;
+            font-weight: 700;
+            color: #fff;
+        }
+        .metric-unit {
+            font-size: 0.85rem;
+            color: var(--deos-accent);
+            margin-left: 3px;
+        }
+
+        .btn-deos {
+            background-color: #1f6feb;
+            color: #fff;
+            border: none;
+        }
+        .btn-deos:hover {
+            background-color: #388bfd;
+            color: #fff;
+        }
+        .btn-estop {
+            background-color: #da3633;
+            color: #fff;
+            font-weight: 700;
+            letter-spacing: 1px;
+            box-shadow: 0 0 10px rgba(218, 54, 51, 0.5);
+        }
+        .btn-estop:hover {
+            background-color: #f85149;
+            box-shadow: 0 0 15px rgba(248, 81, 73, 0.8);
+        }
+
+        .log-box {
+            background-color: #0b0e14;
+            border: 1px solid var(--deos-border);
+            border-radius: 6px;
+            font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+            font-size: 0.85rem;
+            height: 320px;
+            overflow-y: auto;
+            padding: 10px;
+        }
+        .log-entry {
+            margin-bottom: 4px;
+            line-height: 1.4;
+        }
+        .log-time { color: var(--deos-text-dim); }
+        .log-topic { color: var(--deos-accent); font-weight: 600; }
+        .log-data { color: #e6edf3; }
+
+        .table-dark-custom {
+            --bs-table-bg: transparent;
+            --bs-table-border-color: var(--deos-border);
+            color: var(--deos-text);
+        }
+        .table-dark-custom th {
+            color: var(--deos-text-dim);
+            font-size: 0.85rem;
+            text-transform: uppercase;
+        }
+
+        .status-pill {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 6px;
+        }
+        .status-pill.online { background-color: var(--deos-success); box-shadow: 0 0 6px var(--deos-success); }
+        .status-pill.offline { background-color: var(--deos-danger); }
+        .status-pill.warning { background-color: var(--deos-warning); }
+
+        .form-control, .form-select {
+            background-color: #0b0e14;
+            border: 1px solid var(--deos-border);
+            color: #fff;
+        }
+        .form-control:focus, .form-select:focus {
+            background-color: #0b0e14;
+            border-color: var(--deos-accent);
+            color: #fff;
+            box-shadow: 0 0 0 0.25rem var(--deos-accent-glow);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Header Navbar -->
+    <nav class="navbar navbar-expand-lg px-4 py-2 sticky-top">
+        <div class="container-fluid">
+            <a class="navbar-brand d-flex align-items-center" href="#">
+                <i class="fa-solid fa-satellite-dish me-2 text-info"></i>
+                <span>DEOS</span>&nbsp;GROUND CONTROL STATION
+                <span class="badge bg-secondary ms-3" style="font-size: 0.7rem;">v1.1 MASTER (0x11)</span>
+                <span class="badge bg-dark border border-secondary ms-2" style="font-size: 0.7rem;">NODE: 0x02</span>
+            </a>
+
+            <div class="d-flex align-items-center">
+                <span id="wsStatusBadge" class="badge badge-status-offline px-3 py-2 me-3">
+                    <i class="fa-solid fa-circle-nodes me-1"></i> WebSocket: Disconnected
+                </span>
+                <button class="btn btn-estop px-3 py-2" onclick="triggerEStop()">
+                    <i class="fa-solid fa-triangle-exclamation me-1"></i> EMERGENCY STOP
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid px-4 mt-3">
+        <!-- Navigation Tabs -->
+        <ul class="nav nav-tabs" id="gcsTab" role="tablist">
+            <li class="nav-item">
+                <button class="nav-link active" id="overview-tab" data-bs-toggle="tab" data-bs-target="#overview" type="button">
+                    <i class="fa-solid fa-network-wired me-1"></i> System & Overview
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" id="powertrain-tab" data-bs-toggle="tab" data-bs-target="#powertrain" type="button">
+                    <i class="fa-solid fa-gauge-high me-1"></i> Traction / Steering / Brake
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" id="bms-tab" data-bs-toggle="tab" data-bs-target="#bms" type="button">
+                    <i class="fa-solid fa-car-battery me-1"></i> BMS Telemetry
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" id="diag-tab" data-bs-toggle="tab" data-bs-target="#diag" type="button">
+                    <i class="fa-solid fa-stethoscope me-1"></i> Diagnostics & Faults
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" id="lighting-tab" data-bs-toggle="tab" data-bs-target="#lighting" type="button">
+                    <i class="fa-solid fa-lightbulb me-1"></i> Lighting
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" id="subs-tab" data-bs-toggle="tab" data-bs-target="#subs" type="button">
+                    <i class="fa-solid fa-bell me-1"></i> Subscription Engine
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" id="config-tab" data-bs-toggle="tab" data-bs-target="#config" type="button">
+                    <i class="fa-solid fa-sliders me-1"></i> Parameters
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" id="logs-tab" data-bs-toggle="tab" data-bs-target="#logs" type="button">
+                    <i class="fa-solid fa-terminal me-1"></i> Packet Trace
+                </button>
+            </li>
+        </ul>
+
+        <!-- Tab Contents -->
+        <div class="tab-content pt-3" id="gcsTabContent">
+
+            <!-- 1. System & Overview -->
+            <div class="tab-pane fade show active" id="overview" role="tabpanel">
+                <div class="row">
+                    <!-- Nodes Live Health Grid -->
+                    <div class="col-lg-8">
+                        <div class="card">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <span><i class="fa-solid fa-server me-2"></i>DEOS Network Nodes</span>
+                                <small class="text-secondary">Monitored via Heartbeat & PING</small>
+                            </div>
+                            <div class="card-body">
+                                <div class="table-responsive">
+                                    <table class="table table-dark-custom align-middle">
+                                        <thead>
+                                            <tr>
+                                                <th>Status</th>
+                                                <th>Node ID</th>
+                                                <th>Name</th>
+                                                <th>Target Type</th>
+                                                <th>State</th>
+                                                <th>Last Seen</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="nodesTableBody">
+                                            <!-- Dynamically populated -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Quick Tools (Ping & State Control) -->
+                    <div class="col-lg-4">
+                        <div class="card">
+                            <div class="card-header"><i class="fa-solid fa-bolt me-2"></i>Node Ping & Info Tool</div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <label class="form-label text-secondary">Target Node (Unicast Only)</label>
+                                    <select class="form-select" id="pingNodeSelect">
+                                        <option value="3">0x03 - Main STM32</option>
+                                        <option value="16">0x10 - Traction ECU</option>
+                                        <option value="17">0x11 - Steering ECU</option>
+                                        <option value="18">0x12 - Brake ECU</option>
+                                        <option value="32">0x20 - BMS Main (HV)</option>
+                                        <option value="33">0x21 - BMS Aux (LV)</option>
+                                        <option value="48">0x30 - BMS Gateway</option>
+                                    </select>
+                                </div>
+                                <div class="d-flex gap-2">
+                                    <button class="btn btn-deos flex-grow-1" onclick="sendPing()">
+                                        <i class="fa-solid fa-satellite me-1"></i> Send PING
+                                    </button>
+                                    <button class="btn btn-outline-info flex-grow-1" onclick="sendGetNodeInfo()">
+                                        <i class="fa-solid fa-circle-info me-1"></i> Get Info
+                                    </button>
+                                </div>
+                                <div id="pingResultBox" class="mt-3 p-2 rounded bg-black border border-secondary text-center small text-secondary">
+                                    Awaiting PING / Info query...
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card">
+                            <div class="card-header"><i class="fa-solid fa-traffic-light me-2"></i>Global State & Mode Switch</div>
+                            <div class="card-body">
+                                <label class="form-label text-secondary">Set Target State (0x02)</label>
+                                <div class="btn-group w-100 mb-3" role="group">
+                                    <button class="btn btn-outline-warning btn-sm" onclick="sendSetState(1)">STANDBY</button>
+                                    <button class="btn btn-outline-info btn-sm" onclick="sendSetState(2)">READY</button>
+                                    <button class="btn btn-outline-success btn-sm" onclick="sendSetState(3)">ACTIVE</button>
+                                    <button class="btn btn-outline-secondary btn-sm" onclick="sendSetState(5)">SAFE</button>
+                                </div>
+
+                                <label class="form-label text-secondary">Set Target Mode (0x04)</label>
+                                <div class="btn-group w-100" role="group">
+                                    <button class="btn btn-outline-light btn-sm" onclick="sendSetMode(0)">NORMAL</button>
+                                    <button class="btn btn-outline-warning btn-sm" onclick="sendSetMode(1)">MANUAL</button>
+                                    <button class="btn btn-outline-primary btn-sm" onclick="sendSetMode(2)">AUTO</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2. Powertrain (Traction / Steering / Brake) -->
+            <div class="tab-pane fade" id="powertrain" role="tabpanel">
+                <div class="row">
+                    <!-- Traction -->
+                    <div class="col-lg-4">
+                        <div class="card">
+                            <div class="card-header d-flex justify-content-between">
+                                <span><i class="fa-solid fa-car me-2"></i>Traction (0x10)</span>
+                                <span class="badge bg-secondary">0x01 TRACTION</span>
+                            </div>
+                            <div class="card-body">
+                                <div class="row g-2 mb-3">
+                                    <div class="col-6">
+                                        <div class="metric-box">
+                                            <div class="metric-title">Speed</div>
+                                            <div class="metric-value" id="tracSpeedVal">0.00</div>
+                                            <span class="metric-unit">m/s</span>
+                                        </div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="metric-box">
+                                            <div class="metric-title">Motor Current</div>
+                                            <div class="metric-value" id="tracCurrentVal">0.0</div>
+                                            <span class="metric-unit">A</span>
+                                        </div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="metric-box">
+                                            <div class="metric-title">Inverter Temp</div>
+                                            <div class="metric-value" id="tracInvTempVal">0.0</div>
+                                            <span class="metric-unit">°C</span>
+                                        </div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="metric-box">
+                                            <div class="metric-title">Motor Temp</div>
+                                            <div class="metric-value" id="tracMotTempVal">0.0</div>
+                                            <span class="metric-unit">°C</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <hr class="border-secondary">
+                                <div class="mb-2">
+                                    <label class="form-label text-secondary small">Set Target Speed (m/s)</label>
+                                    <div class="input-group">
+                                        <input type="number" step="0.1" class="form-control" id="targetSpeedInput" value="5.0">
+                                        <button class="btn btn-deos" onclick="sendSetSpeed()">SET SPEED</button>
+                                    </div>
+                                </div>
+                                <div class="mb-2">
+                                    <label class="form-label text-secondary small">Set Gear</label>
+                                    <div class="btn-group w-100">
+                                        <button class="btn btn-outline-secondary btn-sm" onclick="sendSetGear(0)">N</button>
+                                        <button class="btn btn-outline-success btn-sm" onclick="sendSetGear(1)">D</button>
+                                        <button class="btn btn-outline-warning btn-sm" onclick="sendSetGear(2)">R</button>
+                                        <button class="btn btn-outline-danger btn-sm" onclick="sendSetGear(3)">P</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Steering -->
+                    <div class="col-lg-4">
+                        <div class="card">
+                            <div class="card-header d-flex justify-content-between">
+                                <span><i class="fa-solid fa-dharmachakra me-2"></i>Steering (0x11)</span>
+                                <span class="badge bg-secondary">0x02 STEERING</span>
+                            </div>
+                            <div class="card-body">
+                                <div class="row g-2 mb-3">
+                                    <div class="col-6">
+                                        <div class="metric-box">
+                                            <div class="metric-title">Current Angle</div>
+                                            <div class="metric-value" id="strAngleVal">0.00</div>
+                                            <span class="metric-unit">deg</span>
+                                        </div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="metric-box">
+                                            <div class="metric-title">Yaw Rate</div>
+                                            <div class="metric-value" id="strYawVal">0.00</div>
+                                            <span class="metric-unit">deg/s</span>
+                                        </div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="metric-box">
+                                            <div class="metric-title">Motor Current</div>
+                                            <div class="metric-value" id="strCurrentVal">0.0</div>
+                                            <span class="metric-unit">A</span>
+                                        </div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="metric-box">
+                                            <div class="metric-title">Motor Temp</div>
+                                            <div class="metric-value" id="strTempVal">0.0</div>
+                                            <span class="metric-unit">°C</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <hr class="border-secondary">
+                                <div class="mb-2">
+                                    <label class="form-label text-secondary small">Set Target Angle (deg, -28 to +28)</label>
+                                    <div class="input-group">
+                                        <input type="number" step="1" class="form-control" id="targetAngleInput" value="0.0">
+                                        <button class="btn btn-deos" onclick="sendSetAngle()">SET ANGLE</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Brake -->
+                    <div class="col-lg-4">
+                        <div class="card">
+                            <div class="card-header d-flex justify-content-between">
+                                <span><i class="fa-solid fa-stop me-2"></i>Brake (0x12)</span>
+                                <span class="badge bg-secondary">0x03 BRAKE</span>
+                            </div>
+                            <div class="card-body">
+                                <div class="row g-2 mb-3">
+                                    <div class="col-6">
+                                        <div class="metric-box">
+                                            <div class="metric-title">Actuator Pos</div>
+                                            <div class="metric-value" id="brkPosVal">0.00</div>
+                                            <span class="metric-unit">mm</span>
+                                        </div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="metric-box">
+                                            <div class="metric-title">Clamp Force</div>
+                                            <div class="metric-value" id="brkForceVal">0</div>
+                                            <span class="metric-unit">N</span>
+                                        </div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="metric-box">
+                                            <div class="metric-title">Long. Accel</div>
+                                            <div class="metric-value" id="brkAccelVal">0.00</div>
+                                            <span class="metric-unit">m/s²</span>
+                                        </div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="metric-box">
+                                            <div class="metric-title">EPB State</div>
+                                            <div class="metric-value" id="brkEpbVal">OFF</div>
+                                            <span class="metric-unit"></span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <hr class="border-secondary">
+                                <div class="mb-2">
+                                    <label class="form-label text-secondary small">Set Brake Demand (0 to 100 %)</label>
+                                    <div class="input-group">
+                                        <input type="number" step="5" class="form-control" id="targetDemandInput" value="0">
+                                        <button class="btn btn-deos" onclick="sendSetBrakeDemand()">SET DEMAND</button>
+                                    </div>
+                                </div>
+                                <div class="d-flex gap-2 mt-2">
+                                    <button class="btn btn-outline-warning flex-grow-1" onclick="sendSetParkBrake(1)">ENGAGE EPB</button>
+                                    <button class="btn btn-outline-secondary flex-grow-1" onclick="sendSetParkBrake(0)">RELEASE EPB</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 3. BMS Telemetry & List Streaming -->
+            <div class="tab-pane fade" id="bms" role="tabpanel">
+                <div class="row">
+                    <!-- BMS Summary -->
+                    <div class="col-lg-6">
+                        <div class="card">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <span><i class="fa-solid fa-battery-full me-2 text-success"></i>BMS Main #1 (0x20 HV Pack)</span>
+                                <button class="btn btn-sm btn-outline-info" onclick="fetchBmsFull(0x20)">
+                                    <i class="fa-solid fa-rotate me-1"></i> Stream All Lists
+                                </button>
+                            </div>
+                            <div class="card-body">
+                                <div class="row g-2">
+                                    <div class="col-4">
+                                        <div class="metric-box">
+                                            <div class="metric-title">Pack Voltage</div>
+                                            <div class="metric-value" id="bmsMainVolt">--</div>
+                                            <span class="metric-unit">V</span>
+                                        </div>
+                                    </div>
+                                    <div class="col-4">
+                                        <div class="metric-box">
+                                            <div class="metric-title">Current</div>
+                                            <div class="metric-value" id="bmsMainCurr">--</div>
+                                            <span class="metric-unit">A</span>
+                                        </div>
+                                    </div>
+                                    <div class="col-4">
+                                        <div class="metric-box">
+                                            <div class="metric-title">SoC</div>
+                                            <div class="metric-value" id="bmsMainSoc">--</div>
+                                            <span class="metric-unit">%</span>
+                                        </div>
+                                    </div>
+                                    <div class="col-4">
+                                        <div class="metric-box">
+                                            <div class="metric-title">Min Cell</div>
+                                            <div class="metric-value" id="bmsMainMinCell">--</div>
+                                            <span class="metric-unit">V</span>
+                                        </div>
+                                    </div>
+                                    <div class="col-4">
+                                        <div class="metric-box">
+                                            <div class="metric-title">Max Cell</div>
+                                            <div class="metric-value" id="bmsMainMaxCell">--</div>
+                                            <span class="metric-unit">V</span>
+                                        </div>
+                                    </div>
+                                    <div class="col-4">
+                                        <div class="metric-box">
+                                            <div class="metric-title">BMS Temp</div>
+                                            <div class="metric-value" id="bmsMainTemp">--</div>
+                                            <span class="metric-unit">°C</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- BMS Aux Summary -->
+                    <div class="col-lg-6">
+                        <div class="card">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <span><i class="fa-solid fa-battery-half me-2 text-warning"></i>BMS Aux #2 (0x21 LV Pack)</span>
+                                <button class="btn btn-sm btn-outline-info" onclick="fetchBmsFull(0x21)">
+                                    <i class="fa-solid fa-rotate me-1"></i> Stream All Lists
+                                </button>
+                            </div>
+                            <div class="card-body">
+                                <div class="row g-2">
+                                    <div class="col-4">
+                                        <div class="metric-box">
+                                            <div class="metric-title">Pack Voltage</div>
+                                            <div class="metric-value" id="bmsAuxVolt">--</div>
+                                            <span class="metric-unit">V</span>
+                                        </div>
+                                    </div>
+                                    <div class="col-4">
+                                        <div class="metric-box">
+                                            <div class="metric-title">Current</div>
+                                            <div class="metric-value" id="bmsAuxCurr">--</div>
+                                            <span class="metric-unit">A</span>
+                                        </div>
+                                    </div>
+                                    <div class="col-4">
+                                        <div class="metric-box">
+                                            <div class="metric-title">SoC</div>
+                                            <div class="metric-value" id="bmsAuxSoc">--</div>
+                                            <span class="metric-unit">%</span>
+                                        </div>
+                                    </div>
+                                    <div class="col-4">
+                                        <div class="metric-box">
+                                            <div class="metric-title">Min Cell</div>
+                                            <div class="metric-value" id="bmsAuxMinCell">--</div>
+                                            <span class="metric-unit">V</span>
+                                        </div>
+                                    </div>
+                                    <div class="col-4">
+                                        <div class="metric-box">
+                                            <div class="metric-title">Max Cell</div>
+                                            <div class="metric-value" id="bmsAuxMaxCell">--</div>
+                                            <span class="metric-unit">V</span>
+                                        </div>
+                                    </div>
+                                    <div class="col-4">
+                                        <div class="metric-box">
+                                            <div class="metric-title">BMS Temp</div>
+                                            <div class="metric-value" id="bmsAuxTemp">--</div>
+                                            <span class="metric-unit">°C</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Cell Voltages Table & 100ms Streaming Viewer -->
+                    <div class="col-lg-7">
+                        <div class="card">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <span><i class="fa-solid fa-microchip me-2"></i>Cell Voltages Stream (100 ms Interval / END_OF_LIST)</span>
+                                <span id="cellStreamStatus" class="badge bg-secondary">Idle</span>
+                            </div>
+                            <div class="card-body" style="max-height: 350px; overflow-y: auto;">
+                                <table class="table table-dark-custom table-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>Cell #</th>
+                                            <th>Voltage (V)</th>
+                                            <th>Relative Bar</th>
+                                            <th>Balancing</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="cellVoltagesTableBody">
+                                        <tr><td colspan="4" class="text-secondary text-center">No cell data streamed yet. Click "Stream All Lists" to request.</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Module Temperatures Viewer -->
+                    <div class="col-lg-5">
+                        <div class="card">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <span><i class="fa-solid fa-temperature-half me-2"></i>Temperature Sensors Stream</span>
+                                <span id="tempStreamStatus" class="badge bg-secondary">Idle</span>
+                            </div>
+                            <div class="card-body" style="max-height: 350px; overflow-y: auto;">
+                                <table class="table table-dark-custom table-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>Sensor #</th>
+                                            <th>Temperature (°C)</th>
+                                            <th>Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="tempsTableBody">
+                                        <tr><td colspan="3" class="text-secondary text-center">No temperature streamed yet.</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 4. Diagnostics & Faults -->
+            <div class="tab-pane fade" id="diag" role="tabpanel">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <div>
+                            <i class="fa-solid fa-triangle-exclamation me-2 text-warning"></i>
+                            <span>Node Fault Registry & Active Alarms (DOC-ICD-DIAG-004)</span>
+                        </div>
+                        <div class="d-flex align-items-center gap-2">
+                            <select class="form-select form-select-sm" id="diagNodeSelect" style="width: 220px;">
+                                <option value="3">0x03 - Main STM32</option>
+                                <option value="16">0x10 - Traction ECU</option>
+                                <option value="17">0x11 - Steering ECU</option>
+                                <option value="18">0x12 - Brake ECU</option>
+                                <option value="32">0x20 - BMS Main</option>
+                                <option value="33">0x21 - BMS Aux</option>
+                                <option value="48">0x30 - BMS Gateway</option>
+                            </select>
+                            <button class="btn btn-sm btn-deos" onclick="sendGetFaults()">
+                                <i class="fa-solid fa-rotate me-1"></i> GET FAULTS
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger" onclick="sendClearFaults()">
+                                <i class="fa-solid fa-trash me-1"></i> CLEAR FAULTS
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div id="faultStreamBanner" class="alert alert-secondary py-2 small d-none">
+                            <i class="fa-solid fa-spinner fa-spin me-2"></i> Streaming fault records (100 ms cadence)... Waiting for <code>0x0000 END_OF_FAULT_LIST</code>.
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-dark-custom align-middle">
+                                <thead>
+                                    <tr>
+                                        <th>Code</th>
+                                        <th>Name</th>
+                                        <th>Description</th>
+                                        <th>Severity</th>
+                                        <th>State</th>
+                                        <th>Count</th>
+                                        <th>Last Uptime</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="faultsTableBody">
+                                    <tr><td colspan="7" class="text-secondary text-center">No fault records received yet. Click "GET FAULTS" to inspect node.</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 5. Lighting (Target: Main STM32 0x03) -->
+            <div class="tab-pane fade" id="lighting" role="tabpanel">
+                <div class="row">
+                    <div class="col-lg-6">
+                        <div class="card">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <span><i class="fa-solid fa-lightbulb me-2 text-warning"></i>Lighting Control (DOC-ICD-SRV-LGHT-012)</span>
+                                <span class="badge bg-secondary">Target: 0x03 MAIN_STM32</span>
+                            </div>
+                            <div class="card-body">
+                                <div class="list-group mb-3">
+                                    <div class="list-group-item bg-dark border-secondary text-white d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <strong>Headlights (0x01)</strong>
+                                            <div class="text-secondary small">Main driving illumination</div>
+                                        </div>
+                                        <div class="btn-group">
+                                            <button class="btn btn-sm btn-outline-success" onclick="sendLightCmd(1, true)">ON</button>
+                                            <button class="btn btn-sm btn-outline-secondary" onclick="sendLightCmd(1, false)">OFF</button>
+                                        </div>
+                                    </div>
+                                    <div class="list-group-item bg-dark border-secondary text-white d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <strong>Brake Light (0x02)</strong>
+                                            <div class="text-secondary small">Rear deceleration stop lamp</div>
+                                        </div>
+                                        <div class="btn-group">
+                                            <button class="btn btn-sm btn-outline-success" onclick="sendLightCmd(2, true)">ON</button>
+                                            <button class="btn btn-sm btn-outline-secondary" onclick="sendLightCmd(2, false)">OFF</button>
+                                        </div>
+                                    </div>
+                                    <div class="list-group-item bg-dark border-secondary text-white d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <strong>Turn Signal Left (0x03)</strong>
+                                            <div class="text-secondary small">Left blinker</div>
+                                        </div>
+                                        <div class="btn-group">
+                                            <button class="btn btn-sm btn-outline-success" onclick="sendLightCmd(3, true)">ON</button>
+                                            <button class="btn btn-sm btn-outline-secondary" onclick="sendLightCmd(3, false)">OFF</button>
+                                        </div>
+                                    </div>
+                                    <div class="list-group-item bg-dark border-secondary text-white d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <strong>Turn Signal Right (0x04)</strong>
+                                            <div class="text-secondary small">Right blinker</div>
+                                        </div>
+                                        <div class="btn-group">
+                                            <button class="btn btn-sm btn-outline-success" onclick="sendLightCmd(4, true)">ON</button>
+                                            <button class="btn btn-sm btn-outline-secondary" onclick="sendLightCmd(4, false)">OFF</button>
+                                        </div>
+                                    </div>
+                                    <div class="list-group-item bg-dark border-secondary text-white d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <strong>All Lights (0xFF)</strong>
+                                            <div class="text-secondary small">Global control</div>
+                                        </div>
+                                        <div class="btn-group">
+                                            <button class="btn btn-sm btn-outline-success" onclick="sendLightCmd(255, true)">ALL ON</button>
+                                            <button class="btn btn-sm btn-outline-danger" onclick="sendLightCmd(255, false)">ALL OFF</button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <button class="btn btn-outline-info w-100" onclick="sendGetLightingStatus()">
+                                    <i class="fa-solid fa-arrows-rotate me-1"></i> Refresh Lighting Status
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-lg-6">
+                        <div class="card">
+                            <div class="card-header"><i class="fa-solid fa-eye me-2"></i>Live Lighting Status Indicators</div>
+                            <div class="card-body">
+                                <div class="row g-3 text-center">
+                                    <div class="col-6">
+                                        <div class="p-3 border border-secondary rounded">
+                                            <i class="fa-regular fa-sun fa-2x mb-2 text-warning" id="iconHeadlight"></i>
+                                            <div>Headlight</div>
+                                            <span class="badge bg-secondary" id="badgeHeadlight">OFF</span>
+                                        </div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="p-3 border border-secondary rounded">
+                                            <i class="fa-solid fa-circle-exclamation fa-2x mb-2 text-danger" id="iconBrakeLight"></i>
+                                            <div>Brake Light</div>
+                                            <span class="badge bg-secondary" id="badgeBrakeLight">OFF</span>
+                                        </div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="p-3 border border-secondary rounded">
+                                            <i class="fa-solid fa-arrow-left fa-2x mb-2 text-warning" id="iconTurnLeft"></i>
+                                            <div>Turn Left</div>
+                                            <span class="badge bg-secondary" id="badgeTurnLeft">OFF</span>
+                                        </div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="p-3 border border-secondary rounded">
+                                            <i class="fa-solid fa-arrow-right fa-2x mb-2 text-warning" id="iconTurnRight"></i>
+                                            <div>Turn Right</div>
+                                            <span class="badge bg-secondary" id="badgeTurnRight">OFF</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 6. Subscription Engine (SUBSCRIBE / UNSUBSCRIBE / 0xFFFF On-Change) -->
+            <div class="tab-pane fade" id="subs" role="tabpanel">
+                <div class="row">
+                    <!-- Create Subscription Form -->
+                    <div class="col-lg-5">
+                        <div class="card">
+                            <div class="card-header"><i class="fa-solid fa-envelope-open-text me-2"></i>Create On-Demand Subscription</div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <label class="form-label text-secondary">Target Producer Node (Unicast Only)</label>
+                                    <select class="form-select" id="subTargetNode">
+                                        <option value="3">0x03 - Main STM32</option>
+                                        <option value="16">0x10 - Traction ECU</option>
+                                        <option value="17">0x11 - Steering ECU</option>
+                                        <option value="18">0x12 - Brake ECU</option>
+                                        <option value="32">0x20 - BMS Main</option>
+                                        <option value="33">0x21 - BMS Aux</option>
+                                    </select>
+                                </div>
+                                <div class="row g-2 mb-3">
+                                    <div class="col-6">
+                                        <label class="form-label text-secondary">Target Service</label>
+                                        <select class="form-select" id="subServiceSelect" onchange="updateSubCommandOptions()">
+                                            <option value="0">0x00 - SYSTEM</option>
+                                            <option value="1">0x01 - TRACTION</option>
+                                            <option value="2">0x02 - STEERING</option>
+                                            <option value="3">0x03 - BRAKE</option>
+                                            <option value="4" selected>0x04 - BMS</option>
+                                            <option value="8">0x08 - LIGHTING</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label text-secondary">Target Command</label>
+                                        <select class="form-select" id="subCommandSelect">
+                                            <!-- Dynamically populated -->
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label text-secondary">Interval (ms)</label>
+                                    <input type="number" class="form-control" id="subIntervalInput" value="100">
+                                    <div class="d-flex gap-1 mt-2">
+                                        <button class="btn btn-sm btn-outline-secondary" onclick="setSubInterval(50)">50ms</button>
+                                        <button class="btn btn-sm btn-outline-secondary" onclick="setSubInterval(100)">100ms</button>
+                                        <button class="btn btn-sm btn-outline-secondary" onclick="setSubInterval(500)">500ms</button>
+                                        <button class="btn btn-sm btn-outline-secondary" onclick="setSubInterval(1000)">1000ms</button>
+                                        <button class="btn btn-sm btn-outline-warning" onclick="setSubInterval(65535)">
+                                            <i class="fa-solid fa-bolt me-1"></i> 0xFFFF On-Change
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label text-secondary">Lease TTL (Seconds, 0 = Infinite)</label>
+                                    <input type="number" class="form-control" id="subTtlInput" value="0">
+                                </div>
+                                <button class="btn btn-deos w-100" onclick="sendSubscribeRequest()">
+                                    <i class="fa-solid fa-paper-plane me-1"></i> SEND SUBSCRIBE (0x0A)
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Active Subscriptions Table -->
+                    <div class="col-lg-7">
+                        <div class="card">
+                            <div class="card-header"><i class="fa-solid fa-list-check me-2"></i>Active Telemetry Subscriptions</div>
+                            <div class="card-body">
+                                <div class="table-responsive">
+                                    <table class="table table-dark-custom align-middle">
+                                        <thead>
+                                            <tr>
+                                                <th>Producer Node</th>
+                                                <th>Service</th>
+                                                <th>Command</th>
+                                                <th>Interval</th>
+                                                <th>TTL</th>
+                                                <th>Action</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="subscriptionsTableBody">
+                                            <tr><td colspan="6" class="text-secondary text-center">No active subscriptions registered.</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 7. Parameters Configuration -->
+            <div class="tab-pane fade" id="config" role="tabpanel">
+                <div class="card">
+                    <div class="card-header"><i class="fa-solid fa-sliders me-2"></i>ECU Parameter Management (DOC-ICD-DATA-002)</div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-md-3">
+                                <label class="form-label text-secondary">Service</label>
+                                <select class="form-select" id="paramServiceSelect" onchange="updateParameterList()">
+                                    <option value="1">0x01 - TRACTION</option>
+                                    <option value="2">0x02 - STEERING</option>
+                                    <option value="3">0x03 - BRAKE</option>
+                                </select>
+                            </div>
+                            <div class="col-md-5">
+                                <label class="form-label text-secondary">Parameter</label>
+                                <select class="form-select" id="paramSelect" onchange="onParameterSelected()">
+                                    <!-- Populated from registry -->
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label text-secondary">Value <span id="paramUnitLabel" class="text-info"></span></label>
+                                <div class="input-group">
+                                    <input type="number" step="any" class="form-control" id="paramValueInput">
+                                    <button class="btn btn-outline-info" onclick="sendGetParameter()">GET</button>
+                                    <button class="btn btn-deos" onclick="sendSetParameter()">SET</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mt-3 p-3 bg-dark border border-secondary rounded">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <strong id="paramDetailName">--</strong>
+                                    <div class="text-secondary small" id="paramDetailDesc">Select a parameter to view metadata and calibration bounds.</div>
+                                </div>
+                                <button class="btn btn-sm btn-outline-warning" onclick="sendSaveParameters()">
+                                    <i class="fa-solid fa-floppy-disk me-1"></i> SAVE TO EEPROM (0xE2)
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 8. Packet Trace / Log -->
+            <div class="tab-pane fade" id="logs" role="tabpanel">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span><i class="fa-solid fa-terminal me-2"></i>Live MQTT / LoRa Telemetry & ARQ Trace</span>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="clearLogs()">Clear</button>
+                    </div>
+                    <div class="card-body p-2">
+                        <div class="log-box" id="logBox">
+                            <!-- Live logs appended here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/app.js"></script>
+</body>
+</html>
+

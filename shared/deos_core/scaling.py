@@ -64,3 +64,4 @@ SIGNALS: Dict[str, SignalSpec] = {
     "bms_cell_voltage": SignalSpec("cell_voltage", 0.001, 0.0, "V", "Individual cell voltage"),
     "bms_sensor_temp": SignalSpec("sensor_temp", 0.1, 0.0, "°C", "Battery module temperature sensor"),
 }
+

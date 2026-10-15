@@ -1,0 +1,82 @@
+networks:
+  deos-net:
+    driver: bridge
+
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2.0
+    container_name: deos_mosquitto
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf
+    networks:
+      - deos-net
+
+  linker:
+    build:
+      context: .
+      dockerfile: services/linker/Dockerfile
+    container_name: deos_linker
+    restart: unless-stopped
+    environment:
+      - MQTT_BROKER=mosquitto
+      - MQTT_PORT=1883
+      - SERIAL_PORT=/dev/ttyUSB0
+      - BAUD_RATE=9600
+      - ACK_TIMEOUT_MS=600
+      - MAX_RETRIES=3
+    depends_on:
+      - mosquitto
+    networks:
+      - deos-net
+
+  encoder:
+    build:
+      context: .
+      dockerfile: services/encoder/Dockerfile
+    container_name: deos_encoder
+    restart: unless-stopped
+    environment:
+      - MQTT_BROKER=mosquitto
+      - MQTT_PORT=1883
+      - DEOS_SOURCE_NODE=0x02
+      - DEOS_PROTOCOL_VERSION=0x11
+      - DEOS_FRAME_LAYOUT=UNIVERSAL_9B
+    depends_on:
+      - mosquitto
+    networks:
+      - deos-net
+
+  decoder:
+    build:
+      context: .
+      dockerfile: services/decoder/Dockerfile
+    container_name: deos_decoder
+    restart: unless-stopped
+    environment:
+      - MQTT_BROKER=mosquitto
+      - MQTT_PORT=1883
+      - DEOS_FRAME_LAYOUT=UNIVERSAL_9B
+    depends_on:
+      - mosquitto
+    networks:
+      - deos-net
+
+  web-ui:
+    build:
+      context: .
+      dockerfile: services/web-ui/Dockerfile
+    container_name: deos_web_ui
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - MQTT_BROKER=mosquitto
+      - MQTT_PORT=1883
+    depends_on:
+      - mosquitto
+    networks:
+      - deos-net

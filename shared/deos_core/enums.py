@@ -244,3 +244,4 @@ class ParkBrakeState(IntEnum):
     """Brake Park Brake State (DOC-ICD-NODE-BRK-010)."""
     RELEASED = 0
     ENGAGED = 1
+

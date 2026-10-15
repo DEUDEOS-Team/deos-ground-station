@@ -34,3 +34,4 @@ def crc16_ccitt_bytes(data: Union[bytes, bytearray, memoryview], seed: int = 0xF
     """Compute CRC16-CCITT and return 2 bytes encoded in Little-Endian."""
     crc = crc16_ccitt(data, seed)
     return crc.to_bytes(2, byteorder="little")
+
