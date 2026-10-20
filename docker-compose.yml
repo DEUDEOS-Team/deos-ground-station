@@ -55,6 +55,9 @@ services:
       - DEOS_SOURCE_NODE=0x02
       - DEOS_PROTOCOL_VERSION=0x11
       - DEOS_FRAME_LAYOUT=UNIVERSAL_9B
+    volumes:
+      - ./services/encoder/main.py:/app/main.py
+      - ./shared:/app/shared
     depends_on:
       - mosquitto
     networks:
@@ -70,6 +73,9 @@ services:
       - MQTT_BROKER=mosquitto
       - MQTT_PORT=1883
       - DEOS_FRAME_LAYOUT=UNIVERSAL_9B
+    volumes:
+      - ./services/decoder/main.py:/app/main.py
+      - ./shared:/app/shared
     depends_on:
       - mosquitto
     networks:
@@ -89,6 +95,7 @@ services:
     volumes:
       - ./services/web-ui/static:/app/static
       - ./services/web-ui/app.py:/app/app.py
+      - ./shared:/app/shared
     depends_on:
       - mosquitto
     networks:

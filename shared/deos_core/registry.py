@@ -49,11 +49,32 @@ COMMON_FAULTS: Dict[int, FaultInfo] = {
     0x0012: FaultInfo(0x0012, "SUBSCRIPTION_MALFORMED_PAYLOAD", "Malformed Subscription Request Payload", FaultSeverity.ERROR),
     0x0013: FaultInfo(0x0013, "SUBSCRIPTION_HANDLER_NOT_FOUND", "Target Service or Command Handler Not Found", FaultSeverity.ERROR),
     0x0014: FaultInfo(0x0014, "SUBSCRIPTION_DISPATCH_FAILED", "Failed to Dispatch Subscription Telemetry Frame", FaultSeverity.ERROR),
+
+    # CAN Bus Common Faults (0x0040 - 0x004F)
+    0x0040: FaultInfo(0x0040, "CAN_INIT_ERROR", "CAN/CAN-FD Kontrolcü Başlatma Hatası", FaultSeverity.CRITICAL),
+    0x0041: FaultInfo(0x0041, "CAN_RX_OVERFLOW", "CAN Alıcı Tamponu Taştı (RX FIFO Overflow)", FaultSeverity.WARNING),
+    0x0042: FaultInfo(0x0042, "CAN_TX_TIMEOUT", "CAN İletim Zaman Aşımı (Mailbox Timeout)", FaultSeverity.ERROR),
+    0x0043: FaultInfo(0x0043, "CAN_BUS_OFF", "CAN Veriyolu Kapandı (CAN Controller Bus-Off)", FaultSeverity.CRITICAL),
+    0x0044: FaultInfo(0x0044, "CAN_ERROR_PASSIVE", "CAN Pasif Hata Seviyesine Geçti (TEC/REC > 127)", FaultSeverity.WARNING),
+    0x0045: FaultInfo(0x0045, "CAN_TX_ERROR", "CAN Veriyolu İletim Hatası (TX Mailbox Dolu / ACK Alınamadı / Hatta Alıcı Yok)", FaultSeverity.WARNING),
+    0x0046: FaultInfo(0x0046, "CAN_RX_ERROR", "CAN Alma Hatası (Form/Stuff/CRC Hatası)", FaultSeverity.WARNING),
+    0x0047: FaultInfo(0x0047, "CAN_ROUTER_DROP", "CAN Router Mesaj Yönlendirme Başarısız (Drop)", FaultSeverity.WARNING),
+
+    # LoRa Radio Common Faults (0x0050 - 0x005F)
+    0x0050: FaultInfo(0x0050, "LORA_INIT_ERROR", "LoRa Modül Başlatma / UART Yanıt Vermiyor", FaultSeverity.ERROR),
+    0x0051: FaultInfo(0x0051, "LORA_TX_TIMEOUT", "LoRa RF Paket Gönderme Zaman Aşımı", FaultSeverity.ERROR),
+    0x0052: FaultInfo(0x0052, "LORA_CRC_ERROR", "LoRa Paket CRC16 Doğrulama Hatası", FaultSeverity.WARNING),
+    0x0053: FaultInfo(0x0053, "LORA_BUSY_TIMEOUT", "LoRa AUX / Meşgul Pini Zaman Aşımı", FaultSeverity.WARNING),
+
+    # Ethernet Common Faults (0x0060 - 0x006F)
+    0x0060: FaultInfo(0x0060, "ETH_PHY_ERROR", "Ethernet PHY Çip İletişim Hatası", FaultSeverity.ERROR),
+    0x0061: FaultInfo(0x0061, "ETH_LINK_DOWN", "Ethernet Fiziksel Bağlantı Koptu (Link Down)", FaultSeverity.WARNING),
 }
 
 # Node-Specific Fault Registries (0x0100+)
 NODE_FAULTS: Dict[Tuple[int, int], FaultInfo] = {
     # Main STM32 (0x03)
+    (NodeId.MAIN_STM32, 0x0045): FaultInfo(0x0045, "CAN_TX_ERROR", "Main STM32 CAN-FD İletim Hatası (TX Mailbox Dolu / ACK Alınamadı / ECU Cevap Vermiyor)", FaultSeverity.WARNING),
     (NodeId.MAIN_STM32, 0x0100): FaultInfo(0x0100, "CANFD_BUS_OFF", "CAN-FD Controller Entered Bus-Off State", FaultSeverity.CRITICAL),
     (NodeId.MAIN_STM32, 0x0101): FaultInfo(0x0101, "ETH_LINK_FAILURE", "Ethernet Physical Link Down", FaultSeverity.ERROR),
     (NodeId.MAIN_STM32, 0x0102): FaultInfo(0x0102, "LORA_COMM_FAILURE", "LoRa UART / Radio Hardware Failure", FaultSeverity.ERROR),
@@ -127,11 +148,38 @@ def get_fault_info(node_id: int, fault_id: int) -> FaultInfo:
     key = (node_id, fault_id)
     if key in NODE_FAULTS:
         return NODE_FAULTS[key]
+
+    # Smart subsystem range fallbacks for unlisted codes
+    if 0x0040 <= fault_id <= 0x004F:
+        name = f"CAN_BUS_ERR_0x{fault_id:02X}"
+        desc = f"CAN / CAN-FD Veriyolu Hatası (0x{fault_id:04X}) - TX/RX veya Donanım İletim Problemi"
+        severity = FaultSeverity.WARNING
+    elif 0x0050 <= fault_id <= 0x005F:
+        name = f"LORA_RADIO_ERR_0x{fault_id:02X}"
+        desc = f"LoRa RF / UART Radyo Hatası (0x{fault_id:04X}) - Paket veya Arayüz Hatası"
+        severity = FaultSeverity.ERROR
+    elif 0x0060 <= fault_id <= 0x006F:
+        name = f"ETH_NET_ERR_0x{fault_id:02X}"
+        desc = f"Ethernet Ağ Arayüz Hatası (0x{fault_id:04X}) - PHY veya Link Hatası"
+        severity = FaultSeverity.ERROR
+    elif 0x0070 <= fault_id <= 0x007F:
+        name = f"SENSOR_ERR_0x{fault_id:02X}"
+        desc = f"Sensör / ADC Giriş Okuma Hatası (0x{fault_id:04X})"
+        severity = FaultSeverity.WARNING
+    elif 0x0080 <= fault_id <= 0x008F:
+        name = f"POWER_ERR_0x{fault_id:02X}"
+        desc = f"Voltaj / Güç Besleme Hatası (0x{fault_id:04X})"
+        severity = FaultSeverity.CRITICAL
+    else:
+        name = f"DTC_0x{fault_id:04X}"
+        desc = f"Düğüm 0x{node_id:02X} üzerinde tanımsız arıza kodu (0x{fault_id:04X}) - ICD dokümanını kontrol edin"
+        severity = FaultSeverity.ERROR
+
     return FaultInfo(
         code=fault_id,
-        name=f"FAULT_{hex(fault_id)}",
-        description=f"Node-specific fault {hex(fault_id)} on Node {hex(node_id)}",
-        default_severity=FaultSeverity.ERROR,
+        name=name,
+        description=desc,
+        default_severity=severity,
     )
 
 

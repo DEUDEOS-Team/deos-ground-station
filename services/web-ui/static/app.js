@@ -29,9 +29,9 @@ function initNodesTable() {
         const row = document.createElement("tr");
         row.id = `node-row-${n.id}`;
         row.innerHTML = `
-            <td><span class="status-pill offline" id="pill-node-${n.id}"></span><span id="statustext-node-${n.id}">OFFLINE</span></td>
-            <td><code>0x${n.id.toString(16).padStart(2, "0").toUpperCase()}</code></td>
-            <td><strong>${n.name}</strong></td>
+            <td><span class="status-pill offline" id="pill-node-${n.id}"></span><span id="statustext-node-${n.id}" class="text-light fw-medium">OFFLINE</span></td>
+            <td><code class="text-info">0x${n.id.toString(16).padStart(2, "0").toUpperCase()}</code></td>
+            <td class="text-white"><strong>${n.name}</strong></td>
             <td><span class="badge bg-dark border border-secondary">${n.type}</span></td>
             <td id="state-node-${n.id}"><span class="badge bg-secondary">UNKNOWN</span></td>
             <td id="seen-node-${n.id}" class="text-secondary small">Never</td>
@@ -275,8 +275,8 @@ function updateCellVoltageRow(idx, volt) {
 
     const pct = Math.max(0, Math.min(100, ((volt - 2.8) / (4.2 - 2.8)) * 100));
     row.innerHTML = `
-        <td><strong>#${idx}</strong></td>
-        <td><code>${volt.toFixed(3)} V</code></td>
+        <td class="text-white"><strong>#${idx}</strong></td>
+        <td><code class="text-info">${volt.toFixed(3)} V</code></td>
         <td style="width: 40%;">
             <div class="progress" style="height: 10px; background-color: #30363d;">
                 <div class="progress-bar bg-info" style="width: ${pct}%;"></div>
@@ -299,8 +299,8 @@ function updateTempRow(idx, temp) {
     }
     const color = temp > 45 ? "danger" : temp > 35 ? "warning" : "success";
     row.innerHTML = `
-        <td><strong>Sensor #${idx}</strong></td>
-        <td><code>${temp.toFixed(1)} °C</code></td>
+        <td class="text-white"><strong>Sensor #${idx}</strong></td>
+        <td><code class="text-info">${temp.toFixed(1)} °C</code></td>
         <td><span class="badge bg-${color}">${temp > 45 ? "HIGH" : "NORMAL"}</span></td>
     `;
 }
@@ -324,13 +324,13 @@ function addFaultRow(f) {
 
     const tr = document.createElement("tr");
     tr.innerHTML = `
-        <td><code>${f.fault_code}</code></td>
-        <td><strong>${f.name}</strong></td>
-        <td><small class="text-secondary">${f.description}</small></td>
+        <td><code class="text-info fw-bold">${f.fault_code}</code></td>
+        <td class="text-white"><strong>${f.name}</strong></td>
+        <td class="text-light"><span class="small">${f.description}</span></td>
         <td><span class="badge bg-${sevColor}">${f.severity_name}</span></td>
         <td><span class="badge bg-${stateColor}">${f.state_name}</span></td>
-        <td>${f.occurrence_count}</td>
-        <td>${f.last_occurrence_ms} ms</td>
+        <td class="text-white font-monospace">${f.occurrence_count}</td>
+        <td class="text-white font-monospace">${f.last_occurrence_ms} ms</td>
     `;
     tbody.appendChild(tr);
 }
