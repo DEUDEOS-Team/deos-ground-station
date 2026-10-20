@@ -36,6 +36,7 @@ services:
       - SERIAL_MOCK=false
       - MOCK_AUTO_ACK=false
     volumes:
+      - /dev:/dev
       - ./services/linker/main.py:/app/main.py
       - ./shared:/app/shared
     depends_on:
