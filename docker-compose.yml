@@ -33,6 +33,11 @@ services:
       - BAUD_RATE=115200
       - ACK_TIMEOUT_MS=1200
       - MAX_RETRIES=3
+      - SERIAL_MOCK=false
+      - MOCK_AUTO_ACK=false
+    volumes:
+      - ./services/linker/main.py:/app/main.py
+      - ./shared:/app/shared
     depends_on:
       - mosquitto
     networks:

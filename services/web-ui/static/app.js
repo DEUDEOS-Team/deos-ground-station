@@ -90,8 +90,24 @@ async function loadRegistry() {
 function handleIncomingEvent(topic, data) {
     logPacket(topic, data);
 
+    // 0. HARDWARE STATUS
+    if (topic === "telemetry/hardware") {
+        updateHardwareStatusBadge(data);
+    }
+
+    // 0.1 COMMAND STATUS (ARQ & Hardware Errors)
+    else if (topic === "command/status") {
+        if (data.status === "ERROR_NO_HARDWARE") {
+            const resBox = document.getElementById("pingResultBox");
+            if (resBox) {
+                resBox.className = "mt-3 p-2 rounded bg-black border border-danger text-center small text-danger";
+                resBox.innerHTML = `<i class="fa-solid fa-triangle-exclamation me-1"></i> ${data.error || "LoRa USB transceiver disconnected!"}`;
+            }
+        }
+    }
+
     // 1. SYSTEM
-    if (topic === "telemetry/system") {
+    else if (topic === "telemetry/system") {
         if (data.type === "heartbeat") {
             updateNodeHeartbeat(data.source, data.state_name || data.state);
         } else if (data.type === "pong") {
@@ -210,6 +226,26 @@ function handleIncomingEvent(topic, data) {
         } else if (data.type === "save_parameters_response") {
             alert(`SAVE Parameters Result: ${data.result_name}`);
         }
+    }
+}
+
+function updateHardwareStatusBadge(data) {
+    const badge = document.getElementById("hwStatusBadge");
+    if (!badge) return;
+    if (data.connected) {
+        if (data.mode === "MOCK") {
+            badge.className = "badge bg-warning text-dark px-3 py-2 me-2";
+            badge.innerHTML = `<i class="fa-solid fa-flask me-1"></i> LoRa: Mock Mode`;
+            badge.title = "Operating in simulated mock mode";
+        } else {
+            badge.className = "badge badge-status-online px-3 py-2 me-2";
+            badge.innerHTML = `<i class="fa-solid fa-usb me-1"></i> LoRa USB: Connected`;
+            badge.title = `Transceiver connected at ${data.port || "/dev/ttyUSB0"}`;
+        }
+    } else {
+        badge.className = "badge badge-status-offline px-3 py-2 me-2";
+        badge.innerHTML = `<i class="fa-solid fa-triangle-exclamation me-1"></i> LoRa USB: Disconnected`;
+        badge.title = data.error || "Device not found on serial port";
     }
 }
 

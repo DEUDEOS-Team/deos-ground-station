@@ -96,6 +96,25 @@ class TestLinkerArq(unittest.TestCase):
         self.assertEqual(len(rx_published), 1)
         self.assertEqual(rx_published[0], vehicle_pure_frame)
 
+    def test_tx_dropped_when_hardware_disconnected(self):
+        # Set linker to non-mock mode with no open serial port
+        self.linker.is_mock = False
+        self.linker.ser = None
+
+        class DummyMsg:
+            topic = "lora/tx/reliable"
+            payload = b"\x03\x02\x05\x11\x00\x00\x08\x01\x04\x12\x34\x56\x78"
+
+        self.linker.on_mqtt_message(None, None, DummyMsg())
+
+        # No serial writes should occur!
+        self.assertEqual(len(self.sent_serial_bytes), 0)
+        # No ARQ should be pending!
+        self.assertEqual(len(self.linker.pending_arq), 0)
+        # Should publish ERROR_NO_HARDWARE to command/status!
+        statuses = [p[1] for p in self.published_mqtt if p[0] == "command/status"]
+        self.assertTrue(any("ERROR_NO_HARDWARE" in s for s in statuses))
+
 
 if __name__ == "__main__":
     unittest.main()

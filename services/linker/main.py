@@ -42,7 +42,7 @@ BAUD_RATE = int(os.getenv("BAUD_RATE", "9600"))
 ACK_TIMEOUT_MS = int(os.getenv("ACK_TIMEOUT_MS", "1200"))
 MAX_RETRIES = int(os.getenv("MAX_RETRIES", "3"))
 SERIAL_MOCK = os.getenv("SERIAL_MOCK", "false").lower() in ("true", "1", "yes")
-MOCK_AUTO_ACK = os.getenv("MOCK_AUTO_ACK", "true").lower() in ("true", "1", "yes")
+MOCK_AUTO_ACK = os.getenv("MOCK_AUTO_ACK", "false").lower() in ("true", "1", "yes")
 
 
 class PendingARQ:
@@ -68,7 +68,24 @@ class LinkerService:
         self.arq_lock = threading.Lock()
 
         self.running = True
-        self.is_mock = False
+        self.is_mock = SERIAL_MOCK
+        self.is_connected = False
+
+    def publish_hardware_status(self, connected: bool, mode: str = "HARDWARE", error: Optional[str] = None):
+        """Publish transceiver hardware health to `telemetry/hardware`."""
+        self.is_connected = connected
+        msg = {
+            "connected": connected,
+            "port": SERIAL_PORT,
+            "baud": BAUD_RATE,
+            "mode": mode,
+            "error": error,
+            "timestamp": time.time(),
+        }
+        try:
+            self.mqtt_client.publish("telemetry/hardware", json.dumps(msg), retain=True)
+        except Exception as e:
+            logger.warning("Failed publishing hardware status: %s", e)
 
     def on_mqtt_connect(self, client, userdata, flags, rc, properties=None):
         if rc == 0:
@@ -76,6 +93,10 @@ class LinkerService:
             client.subscribe("lora/tx/reliable")
             client.subscribe("lora/tx/unreliable")
             logger.info("Subscribed to: lora/tx/reliable, lora/tx/unreliable")
+            self.publish_hardware_status(
+                connected=(self.ser is not None and self.ser.is_open),
+                mode="MOCK" if self.is_mock else ("HARDWARE" if (self.ser and self.ser.is_open) else "DISCONNECTED"),
+            )
         else:
             logger.error("Failed to connect to broker, return code %d", rc)
 
@@ -91,6 +112,19 @@ class LinkerService:
 
         wire_packet = wrap_lora_packet(flag, deos_frame)
         packet_crc = int.from_bytes(wire_packet[-2:], byteorder="little")
+
+        # Guard: Check if physical hardware is ready or explicit mock mode is active
+        if not (self.ser and self.ser.is_open) and not self.is_mock:
+            logger.error("TX DROPPED: Serial port %s is disconnected! Packet CRC=0x%04X", SERIAL_PORT, packet_crc)
+            self.mqtt_client.publish(
+                "command/status",
+                json.dumps({
+                    "status": "ERROR_NO_HARDWARE",
+                    "crc": f"0x{packet_crc:04X}",
+                    "error": f"LoRa USB transceiver ({SERIAL_PORT}) is disconnected! Please connect device.",
+                }),
+            )
+            return
 
         logger.info(
             "TX [%s]: Flag=0x%02X Len=%d CRC=0x%04X (Total wire=%d bytes)",
@@ -234,16 +268,22 @@ class LinkerService:
             if not self.ser or not self.ser.is_open:
                 if not os.path.exists(SERIAL_PORT) and not SERIAL_MOCK:
                     logger.warning(
-                        "Serial port %s not found. Operating in fallback mock mode until device is plugged in...",
+                        "Serial port %s not found. Waiting for USB transceiver to be plugged in...",
                         SERIAL_PORT,
                     )
-                    self.is_mock = True
+                    self.is_mock = False
+                    self.publish_hardware_status(
+                        connected=False,
+                        mode="DISCONNECTED",
+                        error=f"Device {SERIAL_PORT} not found",
+                    )
                     time.sleep(backoff)
-                    backoff = min(backoff * 1.5, 10.0)
+                    backoff = min(backoff * 1.5, 5.0)
                     continue
 
                 if SERIAL_MOCK:
                     self.is_mock = True
+                    self.publish_hardware_status(connected=True, mode="MOCK")
                     time.sleep(1.0)
                     continue
 
@@ -258,10 +298,12 @@ class LinkerService:
                     self.is_mock = False
                     backoff = 1.0
                     logger.info("Successfully opened %s", SERIAL_PORT)
+                    self.publish_hardware_status(connected=True, mode="HARDWARE")
                 except Exception as e:
                     logger.warning("Failed opening serial port (%s). Retrying in %.1fs...", e, backoff)
+                    self.publish_hardware_status(connected=False, mode="ERROR", error=str(e))
                     time.sleep(backoff)
-                    backoff = min(backoff * 1.5, 10.0)
+                    backoff = min(backoff * 1.5, 5.0)
                     continue
 
             # Read available bytes from serial
@@ -282,6 +324,7 @@ class LinkerService:
                         except Exception:
                             pass
                         self.ser = None
+                self.publish_hardware_status(connected=False, mode="DISCONNECTED", error=str(e))
                 time.sleep(1.0)
 
     def run(self):
