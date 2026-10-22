@@ -211,11 +211,23 @@ class LinkerService:
             self.mqtt_client.publish("lora/rx/frame", payload_bytes)
 
     def arq_watchdog_loop(self):
-        """Background thread checking for ARQ retransmissions and timeouts."""
+        """Background thread checking for ARQ retransmissions, timeouts, and periodic hardware status heartbeat."""
         timeout_sec = ACK_TIMEOUT_MS / 1000.0
+        last_hw_heartbeat = 0.0
 
         while self.running:
             now = time.monotonic()
+
+            # Periodic hardware health heartbeat (every 2.0s)
+            if now - last_hw_heartbeat >= 2.0:
+                last_hw_heartbeat = now
+                with self.ser_lock:
+                    is_open = (self.ser is not None and self.ser.is_open)
+                self.publish_hardware_status(
+                    connected=is_open or self.is_mock,
+                    mode="MOCK" if self.is_mock else ("HARDWARE" if is_open else "DISCONNECTED"),
+                )
+
             to_retry = []
             to_timeout = []
 

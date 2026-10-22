@@ -9,7 +9,7 @@ import json
 import logging
 import os
 from contextlib import asynccontextmanager
-from typing import Any, Dict, List, Set
+from typing import Any, Dict, List, Optional, Set
 
 import paho.mqtt.client as mqtt
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
@@ -45,6 +45,7 @@ MQTT_PORT = int(os.getenv("MQTT_PORT", "1883"))
 connected_websockets: Set[WebSocket] = set()
 event_loop: asyncio.AbstractEventLoop = None
 mqtt_client: mqtt.Client = None
+last_hardware_status: Optional[Dict[str, Any]] = None
 
 
 def on_mqtt_connect(client, userdata, flags, rc, properties=None):
@@ -58,12 +59,15 @@ def on_mqtt_connect(client, userdata, flags, rc, properties=None):
 
 
 def on_mqtt_message(client, userdata, msg):
-    global event_loop
+    global event_loop, last_hardware_status
     topic = msg.topic
     try:
         payload = json.loads(msg.payload.decode("utf-8"))
     except Exception:
         payload = {"raw": msg.payload.hex()}
+
+    if topic == "telemetry/hardware":
+        last_hardware_status = payload
 
     event = {
         "topic": topic,
@@ -123,6 +127,17 @@ async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     connected_websockets.add(websocket)
     logger.info("WebSocket client connected (%d active)", len(connected_websockets))
+
+    # Send cached hardware status immediately on connection
+    if last_hardware_status:
+        try:
+            await websocket.send_text(json.dumps({
+                "topic": "telemetry/hardware",
+                "data": last_hardware_status
+            }))
+        except Exception:
+            pass
+
     try:
         while True:
             # Keepalive / listen for possible incoming ping
@@ -130,6 +145,12 @@ async def websocket_endpoint(websocket: WebSocket):
     except WebSocketDisconnect:
         connected_websockets.remove(websocket)
         logger.info("WebSocket client disconnected (%d active)", len(connected_websockets))
+
+
+@app.get("/api/hardware/status")
+async def get_hardware_status():
+    """Return latest cached hardware status."""
+    return last_hardware_status or {"connected": False, "mode": "UNKNOWN"}
 
 
 @app.post("/api/command")

@@ -20,7 +20,22 @@ document.addEventListener("DOMContentLoaded", () => {
     initNodesTable();
     initWebSocket();
     loadRegistry();
+    fetchHardwareStatus();
 });
+
+async function fetchHardwareStatus() {
+    try {
+        const res = await fetch("/api/hardware/status");
+        if (res.ok) {
+            const data = await res.json();
+            if (data && data.connected !== undefined) {
+                updateHardwareStatusBadge(data);
+            }
+        }
+    } catch (e) {
+        console.warn("Failed fetching initial hardware status:", e);
+    }
+}
 
 function initNodesTable() {
     const tbody = document.getElementById("nodesTableBody");
@@ -93,6 +108,13 @@ function handleIncomingEvent(topic, data) {
     // 0. HARDWARE STATUS
     if (topic === "telemetry/hardware") {
         updateHardwareStatusBadge(data);
+    }
+    // Auto-detect: If any vehicle telemetry packet arrives over LoRa, transceiver is undeniably connected!
+    else if (topic.startsWith("telemetry/")) {
+        const badge = document.getElementById("hwStatusBadge");
+        if (badge && badge.innerText.includes("Disconnected")) {
+            updateHardwareStatusBadge({ connected: true, port: "/dev/ttyUSB0", mode: "HARDWARE" });
+        }
     }
 
     // 0.1 COMMAND STATUS (ARQ & Hardware Errors)
