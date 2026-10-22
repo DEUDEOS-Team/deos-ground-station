@@ -102,18 +102,28 @@ async function loadRegistry() {
     }
 }
 
-function handleIncomingEvent(topic, data) {
-    logPacket(topic, data);
+let lastLoggedHwStatus = null;
 
-    // 0. HARDWARE STATUS
+function handleIncomingEvent(topic, data) {
+    // 0. HARDWARE STATUS (Deduplicate periodic heartbeats in trace console)
     if (topic === "telemetry/hardware") {
         updateHardwareStatusBadge(data);
+        const hwStateKey = `${Boolean(data.connected)}_${data.mode || ""}`;
+        if (hwStateKey !== lastLoggedHwStatus) {
+            lastLoggedHwStatus = hwStateKey;
+            logPacket(topic, data);
+        }
+        return;
     }
+
+    logPacket(topic, data);
+
     // Auto-detect: If any vehicle telemetry packet arrives over LoRa, transceiver is undeniably connected!
-    else if (topic.startsWith("telemetry/")) {
+    if (topic.startsWith("telemetry/")) {
         const badge = document.getElementById("hwStatusBadge");
         if (badge && badge.innerText.includes("Disconnected")) {
             updateHardwareStatusBadge({ connected: true, port: "/dev/ttyUSB0", mode: "HARDWARE" });
+            lastLoggedHwStatus = "true_HARDWARE";
         }
     }
 

@@ -70,6 +70,7 @@ class LinkerService:
         self.running = True
         self.is_mock = SERIAL_MOCK
         self.is_connected = False
+        self.last_port_missing_logged = False
 
     def publish_hardware_status(self, connected: bool, mode: str = "HARDWARE", error: Optional[str] = None):
         """Publish transceiver hardware health to `telemetry/hardware`."""
@@ -279,10 +280,12 @@ class LinkerService:
         while self.running:
             if not self.ser or not self.ser.is_open:
                 if not os.path.exists(SERIAL_PORT) and not SERIAL_MOCK:
-                    logger.warning(
-                        "Serial port %s not found. Waiting for USB transceiver to be plugged in...",
-                        SERIAL_PORT,
-                    )
+                    if not self.last_port_missing_logged:
+                        logger.warning(
+                            "Serial port %s not found. Waiting for USB transceiver to be plugged in...",
+                            SERIAL_PORT,
+                        )
+                        self.last_port_missing_logged = True
                     self.is_mock = False
                     self.publish_hardware_status(
                         connected=False,
@@ -308,6 +311,7 @@ class LinkerService:
                             timeout=0.1,
                         )
                     self.is_mock = False
+                    self.last_port_missing_logged = False
                     backoff = 1.0
                     logger.info("Successfully opened %s", SERIAL_PORT)
                     self.publish_hardware_status(connected=True, mode="HARDWARE")
