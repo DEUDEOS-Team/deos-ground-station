@@ -71,9 +71,14 @@ class LinkerService:
         self.is_mock = SERIAL_MOCK
         self.is_connected = False
         self.last_port_missing_logged = False
+        self._last_published_hw_state = None
 
-    def publish_hardware_status(self, connected: bool, mode: str = "HARDWARE", error: Optional[str] = None):
-        """Publish transceiver hardware health to `telemetry/hardware`."""
+    def publish_hardware_status(self, connected: bool, mode: str = "HARDWARE", error: Optional[str] = None, force: bool = False):
+        """Publish transceiver hardware health to `telemetry/hardware` only on state change."""
+        state_key = (connected, mode, error)
+        if not force and self._last_published_hw_state == state_key:
+            return
+        self._last_published_hw_state = state_key
         self.is_connected = connected
         msg = {
             "connected": connected,
@@ -85,6 +90,7 @@ class LinkerService:
         }
         try:
             self.mqtt_client.publish("telemetry/hardware", json.dumps(msg), retain=True)
+            logger.info("Published hardware status: connected=%s, mode=%s, error=%s", connected, mode, error)
         except Exception as e:
             logger.warning("Failed publishing hardware status: %s", e)
 
@@ -97,6 +103,7 @@ class LinkerService:
             self.publish_hardware_status(
                 connected=(self.ser is not None and self.ser.is_open),
                 mode="MOCK" if self.is_mock else ("HARDWARE" if (self.ser and self.ser.is_open) else "DISCONNECTED"),
+                force=True,
             )
         else:
             logger.error("Failed to connect to broker, return code %d", rc)
