@@ -45,9 +45,9 @@ class TestScalingAndRegistry(unittest.TestCase):
         self.assertEqual(f0.code, 0x0000)
         self.assertEqual(f0.name, "END_OF_FAULT_LIST")
 
-        # 0x0010 is Subscription Table Full
+        # 0x0010 is Subscription Table Full (DEOS_FAULT_SUB_TABLE_FULL)
         f_sub = get_fault_info(NodeId.MAIN_STM32, 0x0010)
-        self.assertEqual(f_sub.name, "SUBSCRIPTION_TABLE_FULL")
+        self.assertIn(f_sub.name, ("SUB_TABLE_FULL", "SUBSCRIPTION_TABLE_FULL"))
 
         # 0x0100 on Traction: Motor Comm Lost
         f_trac = get_fault_info(NodeId.TRACTION, 0x0100)

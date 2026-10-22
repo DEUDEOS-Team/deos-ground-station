@@ -9,7 +9,7 @@ Derived from:
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
-from .enums import FaultSeverity, NodeId, ServiceId
+from .enums import CommonFaultId, FaultSeverity, NodeId, ServiceId
 
 
 @dataclass(frozen=True)
@@ -33,48 +33,77 @@ class ParameterInfo:
     max_val: Optional[float] = None
 
 
-# Common Faults (0x0000 - 0x0014) across all nodes
+# Common Faults (0x0000 - 0x00AF) across all nodes (DOC-ICD-DIAG-004)
 COMMON_FAULTS: Dict[int, FaultInfo] = {
-    0x0000: FaultInfo(0x0000, "END_OF_FAULT_LIST", "Marker indicating end of fault list transmission", FaultSeverity.INFO),
-    0x0001: FaultInfo(0x0001, "INTERNAL_SOFTWARE_ERROR", "Internal Software Error / Assertion Failure", FaultSeverity.ERROR),
-    0x0002: FaultInfo(0x0002, "WATCHDOG_RESET", "Independent Watchdog Reset Detected", FaultSeverity.CRITICAL),
-    0x0003: FaultInfo(0x0003, "INVALID_CONFIGURATION", "Invalid Configuration / CRC Mismatch", FaultSeverity.ERROR),
-    0x0004: FaultInfo(0x0004, "COMMUNICATION_TIMEOUT", "Periodic Communication Timeout", FaultSeverity.WARNING),
-    0x0005: FaultInfo(0x0005, "RX_BUFFER_OVERFLOW", "RX Buffer or Message Queue Overflow", FaultSeverity.WARNING),
-    0x0006: FaultInfo(0x0006, "TX_FAILURE", "TX Hardware Buffer Full / Bus Transmission Failure", FaultSeverity.ERROR),
-    0x0007: FaultInfo(0x0007, "PROTOCOL_INVALID_MESSAGE", "Protocol Violation or Malformed Frame", FaultSeverity.WARNING),
-    0x0008: FaultInfo(0x0008, "LOCAL_STORAGE_ERROR", "EEPROM / Flash Storage Read/Write Error", FaultSeverity.ERROR),
-    0x0010: FaultInfo(0x0010, "SUBSCRIPTION_TABLE_FULL", "Subscription Table Capacity Exceeded (Max 8 slots)", FaultSeverity.WARNING),
-    0x0011: FaultInfo(0x0011, "SUBSCRIPTION_BROADCAST_REJECTED", "Subscription Request to Broadcast Address Rejected", FaultSeverity.ERROR),
-    0x0012: FaultInfo(0x0012, "SUBSCRIPTION_MALFORMED_PAYLOAD", "Malformed Subscription Request Payload", FaultSeverity.ERROR),
-    0x0013: FaultInfo(0x0013, "SUBSCRIPTION_HANDLER_NOT_FOUND", "Target Service or Command Handler Not Found", FaultSeverity.ERROR),
-    0x0014: FaultInfo(0x0014, "SUBSCRIPTION_DISPATCH_FAILED", "Failed to Dispatch Subscription Telemetry Frame", FaultSeverity.ERROR),
+    CommonFaultId.END_OF_LIST: FaultInfo(0x0000, "END_OF_FAULT_LIST", "Arıza Listesi Sonu (Aktif arıza taraması tamamlandı)", FaultSeverity.INFO),
 
-    # CAN Bus Common Faults (0x0040 - 0x004F)
-    0x0040: FaultInfo(0x0040, "CAN_INIT_ERROR", "CAN/CAN-FD Kontrolcü Başlatma Hatası", FaultSeverity.CRITICAL),
-    0x0041: FaultInfo(0x0041, "CAN_RX_OVERFLOW", "CAN Alıcı Tamponu Taştı (RX FIFO Overflow)", FaultSeverity.WARNING),
-    0x0042: FaultInfo(0x0042, "CAN_TX_TIMEOUT", "CAN İletim Zaman Aşımı (Mailbox Timeout)", FaultSeverity.ERROR),
-    0x0043: FaultInfo(0x0043, "CAN_BUS_OFF", "CAN Veriyolu Kapandı (CAN Controller Bus-Off)", FaultSeverity.CRITICAL),
-    0x0044: FaultInfo(0x0044, "CAN_ERROR_PASSIVE", "CAN Pasif Hata Seviyesine Geçti (TEC/REC > 127)", FaultSeverity.WARNING),
-    0x0045: FaultInfo(0x0045, "CAN_TX_ERROR", "CAN Veriyolu İletim Hatası (TX Mailbox Dolu / ACK Alınamadı / Hatta Alıcı Yok)", FaultSeverity.WARNING),
-    0x0046: FaultInfo(0x0046, "CAN_RX_ERROR", "CAN Alma Hatası (Form/Stuff/CRC Hatası)", FaultSeverity.WARNING),
-    0x0047: FaultInfo(0x0047, "CAN_ROUTER_DROP", "CAN Router Mesaj Yönlendirme Başarısız (Drop)", FaultSeverity.WARNING),
+    # Sistem & Donanım Hataları (0x0001 - 0x000F)
+    CommonFaultId.INTERNAL_SOFTWARE_ERROR: FaultInfo(0x0001, "INTERNAL_SOFTWARE_ERROR", "Dahili Yazılım Hatası / Assertion Failure", FaultSeverity.ERROR),
+    CommonFaultId.WATCHDOG_RESET: FaultInfo(0x0002, "WATCHDOG_RESET", "Bağımsız Watchdog (IWDG) Reset Algılandı", FaultSeverity.CRITICAL),
+    CommonFaultId.INVALID_CONFIGURATION: FaultInfo(0x0003, "INVALID_CONFIGURATION", "Geçersiz Konfigürasyon / Parametre CRC Hatası", FaultSeverity.ERROR),
+    CommonFaultId.COMMUNICATION_TIMEOUT: FaultInfo(0x0004, "COMMUNICATION_TIMEOUT", "Periyodik İletişim Zaman Aşımı (Heartbeat/Keepalive Kaybı)", FaultSeverity.WARNING),
+    CommonFaultId.LOCAL_STORAGE_ERROR: FaultInfo(0x0005, "LOCAL_STORAGE_ERROR", "Dahili Depolama / Flash / EEPROM Okuma/Yazma Hatası", FaultSeverity.ERROR),
+    CommonFaultId.ESTOP_TRIGGERED: FaultInfo(0x0006, "ESTOP_TRIGGERED", "Acil Durdurma (E-Stop) Tetiklendi", FaultSeverity.CRITICAL),
+    CommonFaultId.MEMORY_ALLOCATION_FAILED: FaultInfo(0x0007, "MEMORY_ALLOCATION_FAILED", "Dinamik Bellek Ayırma Başarısız (Heap/Pool Exhausted)", FaultSeverity.CRITICAL),
 
-    # LoRa Radio Common Faults (0x0050 - 0x005F)
-    0x0050: FaultInfo(0x0050, "LORA_INIT_ERROR", "LoRa Modül Başlatma / UART Yanıt Vermiyor", FaultSeverity.ERROR),
-    0x0051: FaultInfo(0x0051, "LORA_TX_TIMEOUT", "LoRa RF Paket Gönderme Zaman Aşımı", FaultSeverity.ERROR),
-    0x0052: FaultInfo(0x0052, "LORA_CRC_ERROR", "LoRa Paket CRC16 Doğrulama Hatası", FaultSeverity.WARNING),
-    0x0053: FaultInfo(0x0053, "LORA_BUSY_TIMEOUT", "LoRa AUX / Meşgul Pini Zaman Aşımı", FaultSeverity.WARNING),
+    # Telemetri & Abonelik Hataları (0x0010 - 0x001F)
+    CommonFaultId.SUB_TABLE_FULL: FaultInfo(0x0010, "SUB_TABLE_FULL", "Abonelik Tablosu Dolu (Maksimum slot aşıldı)", FaultSeverity.WARNING),
+    CommonFaultId.SUB_BROADCAST_REJECTED: FaultInfo(0x0011, "SUB_BROADCAST_REJECTED", "Broadcast Adresine Abonelik Reddedildi (Unicast Zorunlu)", FaultSeverity.ERROR),
+    CommonFaultId.SUB_MALFORMED_PAYLOAD: FaultInfo(0x0012, "SUB_MALFORMED_PAYLOAD", "Bozuk Abonelik İstek Veri Yükü (Malformed Payload)", FaultSeverity.ERROR),
+    CommonFaultId.SUB_HANDLER_NOT_FOUND: FaultInfo(0x0013, "SUB_HANDLER_NOT_FOUND", "Abonelik Hedef Servis veya Komut Handler Bulunamadı", FaultSeverity.ERROR),
+    CommonFaultId.SUB_DISPATCH_FAILED: FaultInfo(0x0014, "SUB_DISPATCH_FAILED", "Abonelik Telemetri Çerçevesi Dağıtılamadı", FaultSeverity.ERROR),
 
-    # Ethernet Common Faults (0x0060 - 0x006F)
-    0x0060: FaultInfo(0x0060, "ETH_PHY_ERROR", "Ethernet PHY Çip İletişim Hatası", FaultSeverity.ERROR),
-    0x0061: FaultInfo(0x0061, "ETH_LINK_DOWN", "Ethernet Fiziksel Bağlantı Koptu (Link Down)", FaultSeverity.WARNING),
+    # Yönlendirici (Router) Hataları (0x0020 - 0x002F)
+    CommonFaultId.ROUTER_NO_POLICY: FaultInfo(0x0020, "ROUTER_NO_POLICY", "Rota Politikası Fonksiyonu Atanmamış", FaultSeverity.ERROR),
+    CommonFaultId.ROUTER_UNMAPPED_ROUTE: FaultInfo(0x0021, "ROUTER_UNMAPPED_ROUTE", "Hedef Düğüm Rota Tablosunda Yok (Paket Düşürüldü)", FaultSeverity.WARNING),
+    CommonFaultId.ROUTER_TRP_UNAVAILABLE: FaultInfo(0x0022, "ROUTER_TRP_UNAVAILABLE", "Hedef Hat Bağlı Değil veya Taşıyıcı TX Kaydı Yok", FaultSeverity.ERROR),
+    CommonFaultId.ROUTER_LOOPBACK_DETECTED: FaultInfo(0x0023, "ROUTER_LOOPBACK_DETECTED", "Paket Geldiği Hatta Geri Gönderilmek İstendi (Loopback)", FaultSeverity.WARNING),
+    CommonFaultId.ROUTER_QUEUE_FULL: FaultInfo(0x0024, "ROUTER_QUEUE_FULL", "Router Mesaj Kuyruğu Taştı (Queue Overflow)", FaultSeverity.ERROR),
+
+    # Protokol & Çerçeve Hataları (0x0030 - 0x003F)
+    CommonFaultId.PROTOCOL_VERSION_MISMATCH: FaultInfo(0x0030, "PROTOCOL_VERSION_MISMATCH", "Protokol Versiyonu Uyumsuz (v1.1 Bekleniyordu)", FaultSeverity.WARNING),
+    CommonFaultId.FRAME_HEADER_TOO_SHORT: FaultInfo(0x0031, "FRAME_HEADER_TOO_SHORT", "Evrensel Çerçeve Başlık Boyutu Yetersiz (< 9 Byte)", FaultSeverity.WARNING),
+    CommonFaultId.PAYLOAD_TOO_LARGE: FaultInfo(0x0032, "PAYLOAD_TOO_LARGE", "Payload DEOS_MAX_PAYLOAD_LEN Sınırını Aşıyor", FaultSeverity.WARNING),
+    CommonFaultId.FRAME_CRC_MISMATCH: FaultInfo(0x0033, "FRAME_CRC_MISMATCH", "Çerçeve CRC16 Doğrulama Hatası", FaultSeverity.WARNING),
+    CommonFaultId.FRAME_DECODE_FAILED: FaultInfo(0x0034, "FRAME_DECODE_FAILED", "Çerçeve Decode Edilemedi (Parse Hatası)", FaultSeverity.WARNING),
+
+    # CAN / CAN-FD Taşıyıcı Hataları (0x0040 - 0x005F)
+    CommonFaultId.CAN_DEV_NOT_READY: FaultInfo(0x0040, "CAN_DEV_NOT_READY", "CAN Donanım Aygıtı Hazır Değil", FaultSeverity.CRITICAL),
+    CommonFaultId.CAN_MODE_NOT_SUPPORTED: FaultInfo(0x0041, "CAN_MODE_NOT_SUPPORTED", "CAN-FD Modu Donanımca Desteklenmiyor", FaultSeverity.ERROR),
+    CommonFaultId.CAN_FILTER_INSTALL_FAILED: FaultInfo(0x0042, "CAN_FILTER_INSTALL_FAILED", "Donanımsal CAN RX Filtre Kurulamadı", FaultSeverity.ERROR),
+    CommonFaultId.CAN_RX_QUEUE_FULL: FaultInfo(0x0043, "CAN_RX_QUEUE_FULL", "CAN RX Alıcı Kuyruğu Taştı", FaultSeverity.WARNING),
+    CommonFaultId.CAN_TX_QUEUE_FULL: FaultInfo(0x0044, "CAN_TX_QUEUE_FULL", "CAN TX Gönderici Kuyruğu Taştı", FaultSeverity.WARNING),
+    CommonFaultId.CAN_TX_SEND_FAILED: FaultInfo(0x0045, "CAN_TX_SEND_FAILED", "CAN Veriyolu İletim Hatası (Zephyr can_send başarısız / TX Mailbox Dolu / Hatta ACK Alınamadı)", FaultSeverity.WARNING),
+    CommonFaultId.CAN_FRAME_DECODE_ERR: FaultInfo(0x0046, "CAN_FRAME_DECODE_ERR", "Gelen CAN Çerçevesi Parse Edilemedi", FaultSeverity.WARNING),
+    CommonFaultId.CAN_BUS_OFF: FaultInfo(0x0047, "CAN_BUS_OFF", "CAN Controller Bus-Off Durumuna Geçti (Veriyolu Kilitli)", FaultSeverity.CRITICAL),
+
+    # UART / LoRa Taşıyıcı Hataları (0x0060 - 0x007F)
+    CommonFaultId.LORA_DEV_NOT_READY: FaultInfo(0x0060, "LORA_DEV_NOT_READY", "LoRa UART Donanımı Hazır Değil / Yanıt Vermiyor", FaultSeverity.ERROR),
+    CommonFaultId.LORA_TX_QUEUE_FULL: FaultInfo(0x0061, "LORA_TX_QUEUE_FULL", "LoRa TX Kuyruğu Taştı", FaultSeverity.WARNING),
+    CommonFaultId.LORA_RX_BUFFER_OVERFLOW: FaultInfo(0x0062, "LORA_RX_BUFFER_OVERFLOW", "LoRa Ring Buffer Taştı", FaultSeverity.WARNING),
+    CommonFaultId.LORA_CRC_MISMATCH: FaultInfo(0x0063, "LORA_CRC_MISMATCH", "Havadan Gelen LoRa Paketinin CRC'si Hatalı", FaultSeverity.WARNING),
+    CommonFaultId.LORA_FRAME_MALFORMED: FaultInfo(0x0064, "LORA_FRAME_MALFORMED", "Havadan Gelen LoRa Paket Başlığı Bozuk (Magic/Flag Hatası)", FaultSeverity.WARNING),
+    CommonFaultId.LORA_ACK_TIMEOUT: FaultInfo(0x0065, "LORA_ACK_TIMEOUT", "LoRa Güvenilir İletimde ACK Yanıtı Alınamadı (Timeout)", FaultSeverity.WARNING),
+
+    # Ethernet / Network Taşıyıcı Hataları (0x0080 - 0x009F)
+    CommonFaultId.ETH_LINK_DOWN: FaultInfo(0x0080, "ETH_LINK_DOWN", "Ethernet Kablosu Takılı Değil / Link Yok", FaultSeverity.WARNING),
+    CommonFaultId.ETH_SOCKET_CREATE_FAILED: FaultInfo(0x0081, "ETH_SOCKET_CREATE_FAILED", "TCP/UDP Soket Oluşturulamadı", FaultSeverity.ERROR),
+    CommonFaultId.ETH_SOCKET_BIND_FAILED: FaultInfo(0x0082, "ETH_SOCKET_BIND_FAILED", "Soket Porta Bind Edilemedi", FaultSeverity.ERROR),
+    CommonFaultId.ETH_TX_QUEUE_FULL: FaultInfo(0x0083, "ETH_TX_QUEUE_FULL", "Ethernet TX Kuyruğu Taştı", FaultSeverity.WARNING),
+    CommonFaultId.ETH_TX_SEND_FAILED: FaultInfo(0x0084, "ETH_TX_SEND_FAILED", "Soket Send / Sendto Hatası", FaultSeverity.ERROR),
+    CommonFaultId.ETH_CLIENT_DISCONNECTED: FaultInfo(0x0085, "ETH_CLIENT_DISCONNECTED", "Bağlı Web UI / ROS Bridge İstemcisi Koptu", FaultSeverity.WARNING),
+    CommonFaultId.ETH_FRAME_DECODE_ERR: FaultInfo(0x0086, "ETH_FRAME_DECODE_ERR", "Gelen Ethernet Çerçevesi Bozuk", FaultSeverity.WARNING),
+
+    # Dağıtıcı (Dispatcher) Hataları (0x00A0 - 0x00AF)
+    CommonFaultId.DISPATCH_TABLE_FULL: FaultInfo(0x00A0, "DISPATCH_TABLE_FULL", "Handler Tablosunda Yer Kalmadı", FaultSeverity.ERROR),
+    CommonFaultId.DISPATCH_DUPLICATE_HANDLER: FaultInfo(0x00A1, "DISPATCH_DUPLICATE_HANDLER", "Aynı Komut İçin Mükerrer Handler Kaydı Yapıldı", FaultSeverity.WARNING),
+    CommonFaultId.DISPATCH_HANDLER_NOT_FOUND: FaultInfo(0x00A2, "DISPATCH_HANDLER_NOT_FOUND", "Gelen Komut İçin Handler Tanımlı Değil (İşlenemedi)", FaultSeverity.ERROR),
 }
 
 # Node-Specific Fault Registries (0x0100+)
 NODE_FAULTS: Dict[Tuple[int, int], FaultInfo] = {
     # Main STM32 (0x03)
-    (NodeId.MAIN_STM32, 0x0045): FaultInfo(0x0045, "CAN_TX_ERROR", "Main STM32 CAN-FD İletim Hatası (TX Mailbox Dolu / ACK Alınamadı / ECU Cevap Vermiyor)", FaultSeverity.WARNING),
+    (NodeId.MAIN_STM32, 0x0045): FaultInfo(0x0045, "CAN_TX_SEND_FAILED", "Main STM32 CAN-FD İletim Hatası (Zephyr can_send başarısız / TX Mailbox Dolu / Hatta ACK Alınamadı)", FaultSeverity.WARNING),
     (NodeId.MAIN_STM32, 0x0100): FaultInfo(0x0100, "CANFD_BUS_OFF", "CAN-FD Controller Entered Bus-Off State", FaultSeverity.CRITICAL),
     (NodeId.MAIN_STM32, 0x0101): FaultInfo(0x0101, "ETH_LINK_FAILURE", "Ethernet Physical Link Down", FaultSeverity.ERROR),
     (NodeId.MAIN_STM32, 0x0102): FaultInfo(0x0102, "LORA_COMM_FAILURE", "LoRa UART / Radio Hardware Failure", FaultSeverity.ERROR),

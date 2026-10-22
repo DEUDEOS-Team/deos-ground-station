@@ -76,32 +76,83 @@ class CommandRequest(BaseModel):
 
         # Auto-infer default message class and priority if omitted
         if self.message_class is None:
-            if srv == ServiceId.SYSTEM and cmd in (SystemCommand.PING, SystemCommand.PONG, SystemCommand.HEARTBEAT):
-                self.message_class = MessageClass.NETWORK
-            elif cmd in (
-                SystemCommand.GET_NODE_INFO,
-                SystemCommand.GET_STATE,
-                SystemCommand.GET_MODE,
-                SystemCommand.SUBSCRIBE,
-                SystemCommand.UNSUBSCRIBE,
-                TractionCommand.GET_STATUS,
-                SteeringCommand.GET_STATUS,
-                BrakeCommand.GET_STATUS,
-                BmsCommand.GET_STATUS,
-                BmsCommand.GET_CELL_VOLTAGES,
-                BmsCommand.GET_TEMPERATURES,
-                BmsCommand.GET_BALANCING,
-                DiagnosticCommand.GET_HEALTH,
-                DiagnosticCommand.GET_FAULTS,
-                LightingCommand.GET_STATUS,
-                ConfigCommand.GET_PARAMETER,
-            ):
+            if srv == ServiceId.SYSTEM:
+                if cmd in (SystemCommand.PING, SystemCommand.PONG, SystemCommand.HEARTBEAT):
+                    self.message_class = MessageClass.NETWORK
+                elif cmd in (
+                    SystemCommand.GET_NODE_INFO,
+                    SystemCommand.GET_STATE,
+                    SystemCommand.GET_MODE,
+                    SystemCommand.SUBSCRIBE,
+                    SystemCommand.UNSUBSCRIBE,
+                ):
+                    self.message_class = MessageClass.REQUEST
+                elif cmd in (SystemCommand.SET_STATE, SystemCommand.SET_MODE, SystemCommand.RESET_NODE):
+                    self.message_class = MessageClass.COMMAND
+                else:
+                    self.message_class = MessageClass.COMMAND
+
+            elif srv == ServiceId.TRACTION:
+                if cmd == TractionCommand.GET_STATUS:
+                    self.message_class = MessageClass.REQUEST
+                elif cmd in (ConfigCommand.SET_PARAMETER, ConfigCommand.SAVE_PARAMETERS, ConfigCommand.RESTORE_DEFAULTS):
+                    self.message_class = MessageClass.CONFIG
+                elif cmd == ConfigCommand.GET_PARAMETER:
+                    self.message_class = MessageClass.REQUEST
+                else:
+                    self.message_class = MessageClass.COMMAND
+
+            elif srv == ServiceId.STEERING:
+                if cmd == SteeringCommand.GET_STATUS:
+                    self.message_class = MessageClass.REQUEST
+                elif cmd in (ConfigCommand.SET_PARAMETER, ConfigCommand.SAVE_PARAMETERS, ConfigCommand.RESTORE_DEFAULTS):
+                    self.message_class = MessageClass.CONFIG
+                elif cmd == ConfigCommand.GET_PARAMETER:
+                    self.message_class = MessageClass.REQUEST
+                else:
+                    self.message_class = MessageClass.COMMAND
+
+            elif srv == ServiceId.BRAKE:
+                if cmd == BrakeCommand.GET_STATUS:
+                    self.message_class = MessageClass.REQUEST
+                elif cmd in (ConfigCommand.SET_PARAMETER, ConfigCommand.SAVE_PARAMETERS, ConfigCommand.RESTORE_DEFAULTS):
+                    self.message_class = MessageClass.CONFIG
+                elif cmd == ConfigCommand.GET_PARAMETER:
+                    self.message_class = MessageClass.REQUEST
+                else:
+                    self.message_class = MessageClass.COMMAND
+
+            elif srv == ServiceId.BMS:
+                if cmd in (
+                    BmsCommand.GET_STATUS,
+                    BmsCommand.GET_CELL_VOLTAGES,
+                    BmsCommand.GET_TEMPERATURES,
+                    BmsCommand.GET_BALANCING,
+                    ConfigCommand.GET_PARAMETER,
+                ):
+                    self.message_class = MessageClass.REQUEST
+                elif cmd in (ConfigCommand.SET_PARAMETER, ConfigCommand.SAVE_PARAMETERS, ConfigCommand.RESTORE_DEFAULTS):
+                    self.message_class = MessageClass.CONFIG
+                else:
+                    self.message_class = MessageClass.COMMAND
+
+            elif srv == ServiceId.DIAGNOSTIC:
+                if cmd in (DiagnosticCommand.GET_HEALTH, DiagnosticCommand.GET_FAULTS):
+                    self.message_class = MessageClass.REQUEST
+                elif cmd == DiagnosticCommand.CLEAR_FAULTS:
+                    self.message_class = MessageClass.COMMAND
+                else:
+                    self.message_class = MessageClass.REQUEST
+
+            elif srv == ServiceId.LIGHTING:
+                if cmd == LightingCommand.GET_STATUS:
+                    self.message_class = MessageClass.REQUEST
+                else:
+                    self.message_class = MessageClass.COMMAND
+
+            elif cmd == ConfigCommand.GET_PARAMETER:
                 self.message_class = MessageClass.REQUEST
-            elif srv in (ServiceId.TRACTION, ServiceId.STEERING, ServiceId.BRAKE) and cmd in (
-                ConfigCommand.SET_PARAMETER,
-                ConfigCommand.SAVE_PARAMETERS,
-                ConfigCommand.RESTORE_DEFAULTS,
-            ):
+            elif cmd in (ConfigCommand.SET_PARAMETER, ConfigCommand.SAVE_PARAMETERS, ConfigCommand.RESTORE_DEFAULTS):
                 self.message_class = MessageClass.CONFIG
             else:
                 self.message_class = MessageClass.COMMAND
@@ -110,14 +161,18 @@ class CommandRequest(BaseModel):
             if srv == ServiceId.SYSTEM:
                 if cmd in (SystemCommand.RESET_NODE,):
                     self.priority = Priority.EMERGENCY
+                elif cmd in (SystemCommand.SET_STATE, SystemCommand.SET_MODE):
+                    self.priority = Priority.CRITICAL_CONTROL
                 elif cmd in (SystemCommand.SUBSCRIBE, SystemCommand.UNSUBSCRIBE):
                     self.priority = Priority.CONFIG
+                elif cmd in (SystemCommand.PING, SystemCommand.PONG, SystemCommand.HEARTBEAT):
+                    self.priority = Priority.NETWORK
                 else:
                     self.priority = Priority.NETWORK
             elif self.message_class == MessageClass.SAFETY:
                 self.priority = Priority.EMERGENCY
             elif self.message_class == MessageClass.COMMAND:
-                self.priority = Priority.CONTROL
+                self.priority = Priority.CRITICAL_CONTROL
             elif self.message_class == MessageClass.CONFIG:
                 self.priority = Priority.CONFIG
             elif self.message_class == MessageClass.REQUEST:

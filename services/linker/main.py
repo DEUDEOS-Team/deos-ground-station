@@ -150,12 +150,31 @@ class LinkerService:
         self.write_to_serial(wire_packet)
 
         # Report TX status to command/status
+        frame_info = None
+        if len(deos_frame) >= 9:
+            plen = deos_frame[8]
+            payload_bytes = deos_frame[9 : 9 + plen] if len(deos_frame) >= 9 + plen else deos_frame[9:]
+            frame_info = {
+                "dest": f"0x{deos_frame[0]:02X}",
+                "src": f"0x{deos_frame[1]:02X}",
+                "priority": deos_frame[2],
+                "version": f"0x{deos_frame[3]:02X}",
+                "message_class": deos_frame[4],
+                "service": f"0x{deos_frame[5]:02X}",
+                "command": f"0x{deos_frame[6]:02X}",
+                "sequence": deos_frame[7],
+                "payload": " ".join(f"{b:02X}" for b in payload_bytes),
+            }
+
         status_msg = {
             "status": "SENT_AWAITING_ACK" if is_reliable else "SENT_NO_ACK_REQUIRED",
             "crc": f"0x{packet_crc:04X}",
             "flag": flag,
             "attempt": 1 if is_reliable else None,
             "length": len(deos_frame),
+            "wire_hex": " ".join(f"{b:02X}" for b in wire_packet),
+            "deos_hex": " ".join(f"{b:02X}" for b in deos_frame),
+            "frame_info": frame_info,
         }
         self.mqtt_client.publish("command/status", json.dumps(status_msg))
 

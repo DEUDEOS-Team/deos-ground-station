@@ -426,6 +426,8 @@ function sendSetState(targetState) {
         destination: dest,
         service: 0x00,
         command: 0x02,
+        message_class: 0x01,
+        priority: 0x01,
         ack: true,
         params: { target_state: targetState },
     });
@@ -438,6 +440,8 @@ function sendSetMode(targetMode) {
         destination: dest,
         service: 0x00,
         command: 0x04,
+        message_class: 0x01,
+        priority: 0x01,
         ack: true,
         params: { target_mode: targetMode },
     });
@@ -750,7 +754,17 @@ function logPacket(topic, data) {
     const entry = document.createElement("div");
     entry.className = "log-entry";
     const time = new Date().toLocaleTimeString();
-    entry.innerHTML = `<span class="log-time">[${time}]</span> <span class="log-topic">${topic}</span>: <span class="log-data">${JSON.stringify(data)}</span>`;
+
+    if (topic === "command/status" && data.wire_hex) {
+        const info = data.frame_info;
+        const infoStr = info 
+            ? `| Dest=${info.dest} Src=${info.src} Prio=${info.priority} Class=${info.message_class} Srv=${info.service} Cmd=${info.command} Seq=${info.sequence}${info.payload ? ' Payload=[' + info.payload + ']' : ''}` 
+            : "";
+        entry.innerHTML = `<span class="log-time">[${time}]</span> <span class="badge bg-primary text-white me-1">TX LORA</span> <span class="log-topic">${topic}</span>: <span class="text-warning fw-bold font-monospace">${data.wire_hex}</span> <span class="text-info small ms-1">${infoStr}</span>`;
+    } else {
+        entry.innerHTML = `<span class="log-time">[${time}]</span> <span class="log-topic">${topic}</span>: <span class="log-data">${JSON.stringify(data)}</span>`;
+    }
+
     box.appendChild(entry);
     box.scrollTop = box.scrollHeight;
 }
