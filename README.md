@@ -4,6 +4,7 @@
 ![Architecture](https://img.shields.io/badge/Architecture-Microservices-success.svg)
 ![Transport](https://img.shields.io/badge/Transport-LoRa_UART_(CRC16--CCITT)-orange.svg)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED.svg)
+![Tests](https://img.shields.io/badge/Unit_Tests-25_Passed-brightgreen.svg)
 
 **Dokuz Eylül Otonom Sistemler (DEOS)** elektrikli otonom yarış aracının uzaktan telemetri izleme, gerçek zamanlı kontrol, dinamik abonelik yönetimi, arıza teşhisi (Diagnostics) ve parametre konfigürasyonu için geliştirilmiş mikroservis tabanlı **Yer Kontrol İstasyonu (`DEOS_NODE_GROUND_CONTROL = 0x02`)** yazılımıdır.
 
@@ -15,9 +16,12 @@ Bu proje, **DEOS v1.1 (`0x11`) Medya Bağımsız Çekirdek Protokol** mimarisi v
 
 * **Medya Bağımsız Evrensel Çerçeve (`Universal DEOS Frame`):** Yer İstasyonu donanımsal 29-bit CAN ID hesaplaması veya DLC yuvarlaması yapmaz; doğrudan medya bağımsız `deos_message_t` çerçevesi üretir ve tüketir. Araç içi CAN-FD dönüşümü araç üzerindeki `DEOS_NODE_MAIN_STM32 (0x03)` Router düğümü tarafından otomatik gerçekleştirilir.
 * **Katmanlı Simetrik Codec Mimarisi:** `Encoder` ve `Decoder` servisleri tamamen durumsuz (stateless) olarak saf DEOS Evrensel Çerçevesi seviyesinde simetrik çalışır.
-* **Güvenilir LoRa L2 Taşıma Katmanı (`Linker`):** `0xAA 0x55` senkronizasyonu, `CRC16-CCITT (0x1021)` doğrulaması, kopmalara karşı otomatik yeniden bağlanma (`auto-reconnect`) ve kritik komutlar için çift yönlü **ACK / Otomatik Tekrar Gönderim (ARQ)** mekanizmasını tek merkezden yönetir.
+* **Güvenilir LoRa L2 Taşıma Katmanı (`Linker`):** `0xAA 0x55` senkronizasyonu, `CRC16-CCITT (0x1021)` doğrulaması ve kritik komutlar için çift yönlü **ACK / Otomatik Tekrar Gönderim (ARQ)** mekanizmasını tek merkezden yönetir.
+* **Dinamik USB Hotplug & Auto-Reconnect:** `/dev:/dev` bind mount ve ayrıcalıklı izinler sayesinde LoRa USB dönüştürücü çalışma anında takılıp çıkarılabilir; donanım koptuğunda veya sonradan takıldığında konteyneri yeniden başlatmaya gerek kalmadan otomatik bağlanır.
+* **Canlı Donanım Güvenlik Koruması (`Hardware Guard`):** USB modülü bağlı değilken gönderilen komutlar hataya düşürülerek operatöre `ERROR_NO_HARDWARE` uyarısı verilir; arayüz sağ üstünde canlı bağlantı durumu rozeti (`LoRa USB: Connected / Disconnected / Mock Mode`) yer alır.
 * **Dinamik Telemetri Abonelik Motoru (`Subscription Engine`):** Bant genişliğini korumak için polling yerine periyodik (`10..65534 ms`), kira süreli (`Lease TTL`) veya yalnızca durum değiştiğinde tetiklenen **On-Change (`0xFFFF`)** telemetri aboneliklerini (`SUBSCRIBE` / `UNSUBSCRIBE`) destekler.
-* **Çoklu Paket (Stream) Liste Yönetimi:** `BMS` (hücre voltajları, sıcaklıklar, balans durumu) ve `DIAGNOSTIC` (`GET_FAULTS`) servislerinden 100 ms aralıklarla akan parçalı yanıtları (`END_OF_LIST` / `END_OF_FAULT_LIST`) otomatik birleştirir.
+* **Çoklu Paket (Stream) Liste Yönetimi:** `BMS` (hücre voltajları, sıcaklıklar, balans durumu) ve `DIAGNOSTIC` (`GET_FAULTS`) servislerinden akan parçalı yanıtları (`END_OF_LIST` / `END_OF_FAULT_LIST`) otomatik birleştirir.
+* **Standart Genişletilmiş Arıza Kütüphanesi (`Fault Registry`):** `CommonFaultId` (`0x0000` - `0x00A2`) standardındaki tüm Sistem, Telemetri, Router, CAN-FD (`0x0045 CAN_TX_SEND_FAILED`), LoRa, Ethernet ve Dağıtıcı (Dispatcher) arızalarını yerleşik Türkçe açıklamaları ve ciddiyet seviyeleriyle anlık görüntüler.
 
 ---
 
@@ -32,6 +36,7 @@ Sistem, `docker-compose` çatısı altında izole bir köprü ağı (`deos-net`)
                              └───────┬────────▲───────┘
                      command/request │        │ telemetry/#
                              (JSON)  │        │ command/status (JSON)
+                                     │        │ telemetry/hardware (JSON)
                                      ▼        │
 ┌────────────────────────────────────┴────────┴───────────────────────────────────┐
 │ CODEC KATMANI (Durumsuz - Saf Medya Bağımsız DEOS Evrensel Çerçevesi ile Çalışır)│
@@ -51,15 +56,17 @@ Sistem, `docker-compose` çatısı altında izole bir köprü ağı (`deos-net`)
 │                        Linker Mikroservisi (linker)                             │
 │                                                                                 │
 │   - TX: Saf DEOS Frame'e AA 55 + Flag + Len + CRC16 ekler, UART'a basar.        │
-│   - ARQ (TX): Flag 0x01 ise 500-1000 ms ACK timer başlatır (Max 3 retry).       │
+│   - Trace: Basılan ham wire paketi ve başlık detaylarını command/status'a yazar.│
+│   - ARQ (TX): Flag 0x01 ise 1200 ms ACK timer başlatır (Max 3 retry).           │
 │   - RX: UART'tan AA 55 senkronizasyonu yapar, CRC16-CCITT doğrular.             │
 │   - ACK (RX->TX): Gelen pakette Flag 0x01 (ACK_REQ) ise derhal UART'a           │
 │     Flag 0x02 (IS_ACK) + Gelen_CRC16 yanıtı basar.                              │
 │   - ACK (TX Onayı): Gelen paket Flag 0x02 (IS_ACK) ise eşleşen CRC timer'ını    │
 │     durdurur ve UI'a command/status basar.                                      │
 │   - Soyma: Veri paketinin L2 zarfını soyup saf DEOS Frame'i Decoder'a verir.    │
+│   - Health: Donanım bağlantı değişimini telemetry/hardware konusuna bildirir.   │
 └────────────────────────────────────────┬────────────────────────────────────────┘
-                                         │ UART (pyserial: /dev/ttyUSB0)
+                                         │ UART (pyserial: /dev/ttyUSB0 @ 115200)
                                          ▼
                             ┌────────────────────────┐
                             │  Ebyte E220-900T22D    │
@@ -69,17 +76,17 @@ Sistem, `docker-compose` çatısı altında izole bir köprü ağı (`deos-net`)
 
 ### Mikroservislerin Görevleri
 1. **`mosquitto`:** Servisler arası asenkron MQTT Pub/Sub mesajlaşmasını yönetir (`1883` TCP, `9001` WebSocket).
-2. **`encoder`:** Web arayüzünden gelen yüksek seviyeli JSON komutlarını Pydantic v2 ve ICD kurallarına göre doğrular (Unicast zorunlulukları, BMS/Lighting hedef düğüm kontrolleri), ölçekler ve saf DEOS Evrensel Çerçevesi olarak `lora/tx/reliable` veya `lora/tx/unreliable` konularına basar.
+2. **`encoder`:** Web arayüzünden gelen yüksek seviyeli JSON komutlarını Pydantic v2 ve ICD kurallarına göre doğrular (servis bazlı komut ayrımı, Unicast kısıtları, BMS/Lighting hedef düğüm kuralları), ölçekler ve saf DEOS Evrensel Çerçevesi olarak `lora/tx/reliable` veya `lora/tx/unreliable` konularına basar.
 3. **`decoder`:** Linker'dan gelen doğrulanmış saf DEOS Evrensel Çerçevesini (`lora/rx/frame`) ayrıştırır, Little-Endian ham verileri fiziksel birimlere ($\text{Physical} = \text{Raw} \times \text{Scale} + \text{Offset}$) dönüştürür ve ilgili `telemetry/<servis>` konusuna JSON olarak yayınlar.
-4. **`linker`:** Seri port (`/dev/ttyUSB0`) bağlantısını, LoRa L2 çerçevelemesini (`0xAA 0x55 + Flag + Length + Payload + CRC16`), giden kritik paketler için ARQ tekrar gönderimini ve araçtan gelen kritik paketler için anlık ACK yanıtlarını yönetir.
-5. **`web-ui`:** Operatör kontrol paneli, canlı telemetri grafikleri, abonelik yöneticisi, parametre ayar ekranı ve arıza (Fault) izleme arayüzünü sunar.
+4. **`linker`:** Seri port (`/dev/ttyUSB0`) bağlantısını, donanım tak-çıkar izlemesini, LoRa L2 çerçevelemesini (`0xAA 0x55 + Flag + Length + Payload + CRC16`), giden kritik paketler için ARQ tekrar gönderimini ve araçtan gelen kritik paketler için anlık ACK yanıtlarını yönetir.
+5. **`web-ui`:** FastAPI ve vanilla modern HTML5/JS dashboard. Operatör kontrol paneli, durum (State) ve sürüş modu (Mode) geçişleri, canlı telemetri, abonelik yöneticisi, parametre kalibrasyon ekranı, arıza (DTC) listesi ve canlı LoRa TX/RX ham paket izleyicisini sunar.
 
 ---
 
 ## Dizin Yapısı
 
 ```text
-deos-ground-station/
+deos_ground_station/
 ├── docker-compose.yml
 ├── BLUEPRINT_GROUND_STATION_MICROSERVICES.md
 ├── README.md
@@ -89,17 +96,18 @@ deos-ground-station/
 │   ├── pyproject.toml
 │   └── deos_core/
 │       ├── __init__.py
-│       ├── enums.py          # Node ID, Priority, Class, Service, Command, State, Mode, Result Enum'ları
+│       ├── enums.py          # Node ID, Priority, Class, Service, Command, State, Mode, CommonFaultId Enum'ları
 │       ├── crc.py            # Standart CRC16-CCITT (Polinom: 0x1021, Seed: 0xFFFF, Little-Endian)
 │       ├── framing.py        # Universal DEOS Frame (9B/8B) ve LoRa L2 Zarfı paketleme/çözme
-│       ├── models.py         # Pydantic v2 komut/telemetri şemaları ve ICD adresleme validatörleri
+│       ├── models.py         # Pydantic v2 komut/telemetri şemaları, MessageClass çıkarımı ve ICD validatörleri
 │       ├── scaling.py        # ICD PhysicalValue = RawValue * Scale + Offset dönüşüm yardımcıları
-│       └── registry.py       # Servis bazlı Parameter ID ve Node bazlı Fault ID sözlükleri
-└── services/
-    ├── linker/               # UART, LoRa L2 Zarf Ekleme/Soyma, Çift Yönlü ACK/Retry FSM
-    ├── encoder/              # JSON Komut -> Saf DEOS Evrensel Çerçevesi (Binary)
-    ├── decoder/              # Saf DEOS Evrensel Çerçevesi -> Ölçeklenmiş JSON Telemetri
-    └── web-ui/               # Operatör Dashboard & Web Arayüzü (Port 8000)
+│       └── registry.py       # Parametre listeleri ve Türkçe DTC / Fault sözlükleri (0x0000 - 0x00A2)
+├── services/
+│   ├── linker/               # UART, LoRa L2 Zarfı, Hotplug, Çift Yönlü ARQ FSM (Port: /dev/ttyUSB0)
+│   ├── encoder/              # JSON Komut -> Saf DEOS Evrensel Çerçevesi (Binary)
+│   ├── decoder/              # Saf DEOS Evrensel Çerçevesi -> Ölçeklenmiş JSON Telemetri
+│   └── web-ui/               # Operatör Dashboard & WebSocket Arayüzü (Port 8000)
+└── tests/                    # 25 Kapsamlı Birim Testi (Framing, CRC16, Symmetry, ARQ, Registry)
 ```
 
 ---
@@ -131,6 +139,8 @@ $$\underbrace{\text{0xAA 0x55}}_{2\text{ B (Magic)}} + \underbrace{\text{Flag}}_
 | `0x20` | `DEOS_NODE_BMS_MAIN` | `BMS (0x04)`, `SYSTEM`, `DIAGNOSTIC` | Ana HV Batarya (Daly BMS #1 Sanal Düğümü) |
 | `0x21` | `DEOS_NODE_BMS_AUX` | `BMS (0x04)`, `SYSTEM`, `DIAGNOSTIC` | Yardımcı LV Batarya (Daly BMS #2 Sanal Düğümü) |
 | `0x30` | `DEOS_NODE_BMS_GATEWAY` | `SYSTEM (0x00)`, `DIAGNOSTIC (0x06)` | Classic CAN – CAN-FD Köprü Donanımı |
+| `0xFE` | `DEOS_NODE_CAN_BROADCAST` | CAN Veriyolu Geneli Yayın | CAN Omurgasındaki Tüm ECU'lar |
+| `0xFF` | `DEOS_NODE_GLOBAL_BROADCAST`| Genel Sistem Yayını | Araç ve Yer İstasyonundaki Tüm Düğümler |
 
 ---
 
@@ -138,11 +148,12 @@ $$\underbrace{\text{0xAA 0x55}}_{2\text{ B (Magic)}} + \underbrace{\text{Flag}}_
 
 | Topic Adı | Yön | Format | Açıklama |
 | :--- | :--- | :--- | :--- |
-| `command/request` | `web-ui` $\rightarrow$ `encoder` | JSON | Operatörün gönderdiği yüksek seviyeli komut / abonelik / config isteği |
+| `command/request` | `web-ui` $\rightarrow$ `encoder` | JSON | Operatörün gönderdiği komut, durum geçişi veya abonelik isteği |
 | `lora/tx/reliable` | `encoder` $\rightarrow$ `linker` | Binary | Saf DEOS Çerçevesi (`Flag=0x01 ACK_REQ` ile zarflanır) |
 | `lora/tx/unreliable` | `encoder` $\rightarrow$ `linker` | Binary | Saf DEOS Çerçevesi (`Flag=0x00 NONE` ile zarflanır) |
 | `lora/rx/frame` | `linker` $\rightarrow$ `decoder` | Binary | L2 zarfı soyulmuş, CRC16 doğrulanmış Saf DEOS Çerçevesi |
-| `command/status` | `linker` $\rightarrow$ `web-ui` | JSON | Komut gönderim, CRC16, ACK, retry ve zaman aşımı durumları |
+| `command/status` | `linker` $\rightarrow$ `web-ui` | JSON | İletim durumu, ARQ timeout/ack, giden ham `wire_hex`, `frame_info` ve `ERROR_NO_HARDWARE` |
+| `telemetry/hardware`| `linker` $\rightarrow$ `web-ui` | JSON | Canlı LoRa USB bağlantı durumu (`connected`, `port`, `baud`, `mode`, `error`) |
 | `telemetry/system` | `decoder` $\rightarrow$ `web-ui` | JSON | `PING/PONG` (RTT), `HEARTBEAT` (State), `GET_NODE_INFO`, `SUBSCRIBE` yanıtları |
 | `telemetry/traction` | `decoder` $\rightarrow$ `web-ui` | JSON | Hız (`m/s`), motor akımı (`A`), invertör ve motor sıcaklıkları (`°C`) |
 | `telemetry/steering` | `decoder` $\rightarrow$ `web-ui` | JSON | Direksiyon açısı (`deg`), motor akımı/sıcaklığı, şasi yaw rate (`deg/s`) |
@@ -158,18 +169,23 @@ $$\underbrace{\text{0xAA 0x55}}_{2\text{ B (Magic)}} + \underbrace{\text{Flag}}_
 ## Kurulum ve Çalıştırma
 
 ### 1. Ön Gereksinimler
+* **Linux İşletim Sistemi** (Ubuntu 20.04/22.04/24.04 önerilir)
 * **Docker** ve **Docker Compose**
-* LoRa UART modülü bağlıyken Linux host üzerinde seri port erişim izni (`/dev/ttyUSB0`, `dialout` grubu)
+* Kullanıcının seri port erişim grubu üyeliği:
+  ```bash
+  sudo usermod -aG dialout $USER
+  ```
 
-### 2. Seri Port ve Ortam Yapılandırması
-`docker-compose.yml` içindeki ortam değişkenlerini donanımınıza ve araçtaki STM32 firmware başlık yapısına göre kontrol edin:
+### 2. Yapılandırma (`docker-compose.yml`)
+Varsayılan ortam değişkenleri gerçek araç testleri için optimize edilmiştir:
 
 ```yaml
 # Linker Servisi
 SERIAL_PORT=/dev/ttyUSB0
-BAUD_RATE=9600
-ACK_TIMEOUT_MS=600
-MAX_RETRIES=3
+BAUD_RATE=115200       # LoRa UART donanım hızı
+ACK_TIMEOUT_MS=1200    # LoRa hava süresine uygun ARQ zaman aşımı
+MAX_RETRIES=3          # Maksimum yeniden gönderim denemesi
+SERIAL_MOCK=false      # Gerçek donanım olmadığında yazılımsal test için 'true' yapılabilir
 
 # Encoder & Decoder Servisleri
 DEOS_SOURCE_NODE=0x02
@@ -177,19 +193,29 @@ DEOS_PROTOCOL_VERSION=0x11
 DEOS_FRAME_LAYOUT=UNIVERSAL_9B  # veya COMMON_8B
 ```
 
+> **Not:** `./shared`, `./services/web-ui/static` ve mikroservis Python kodları konteynerlere volume olarak bağlıdır. Kodlarda veya arayüzde yaptığınız değişiklikler için konteyneri baştan derlemeniz gerekmez (`hot-reload`).
+
 ### 3. Servisleri Başlatma
 ```bash
 # Tüm mikroservisleri derleyip arka planda başlatın
 docker compose up -d --build
 
-# Logları canlı izleyin
+# Canlı log akışını izleyin
 docker compose logs -f
 ```
 
 ### 4. Arayüz ve Bağlantı Noktaları
-* **Web Operatör Paneli (`web-ui`):** `http://localhost:8000`
+* **Web Operatör Paneli (`web-ui`):** [`http://localhost:8000`](http://localhost:8000)
 * **MQTT Broker (Konteyner İçi / TCP):** `localhost:1883`
 * **MQTT WebSocket:** `ws://localhost:9001`
+
+### 5. Birim Testlerini Çalıştırma
+Sistem içindeki tüm codec dönüşümleri, ARQ zamanlayıcıları, CRC16 fonksiyonları ve Pydantic kuralları 25 adet otomatik birim testi ile korunur:
+
+```bash
+# Sanal ortamda veya yerelde çalıştırma
+python3 -m unittest discover tests
+```
 
 ---
 
@@ -206,7 +232,7 @@ Bu depodaki kod tabanı aşağıdaki resmi **DEOS v1.1** şartnamelerini referan
 | `DOC-ICD-TRP-CANFD-005` | v1.1 | CAN-FD Transport Adapter (Araç İçi 29-bit CAN ID & DLC Yuvarlama Kuralları) |
 | `DOC-ICD-TRP-ETH-006` | v1.1 | Ethernet Transport Adapter (Textual TCP 5000 & ROS 2 Bridge UDP 5001) |
 | `DOC-ICD-TRP-LORA-007` | v1.1 | LoRa Transport Adapter (LoRa UART Çerçeveleme, CRC16-CCITT & ARQ) |
-| `DOC-ICD-NODE-TRAC-008` | v1.1 | Traction Node & Service (`0x10` Tahrik Дüğümü ve `0x01` Servisi) |
+| `DOC-ICD-NODE-TRAC-008` | v1.1 | Traction Node & Service (`0x10` Tahrik Düğümü ve `0x01` Servisi) |
 | `DOC-ICD-NODE-STR-009` | v1.1 | Steering Node & Service (`0x11` Direksiyon Düğümü ve `0x02` Servisi) |
 | `DOC-ICD-NODE-BRK-010` | v1.1 | Brake Node & Service (`0x12` Fren Düğümü ve `0x03` Servisi) |
 | `DOC-ICD-NODE-BMS-012` | v1.1 | BMS Service & Gateway Protocol (`0x20` BMS Main, `0x21` BMS Aux, `0x30` Gateway) |
