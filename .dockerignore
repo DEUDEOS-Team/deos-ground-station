@@ -1,0 +1,13 @@
+.git
+.venv
+venv
+env
+__pycache__
+*.py[cod]
+*.so
+build/
+dist/
+*.egg-info/
+docs/
+mosquitto/data/
+mosquitto/log/
