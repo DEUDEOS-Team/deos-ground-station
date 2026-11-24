@@ -1,3 +1,6 @@
 [submodule "docs"]
 	path = docs
 	url = https://github.com/DEUDEOS-Team/deos-docs.git
+[submodule "deos-protocol"]
+	path = deos-protocol
+	url = https://github.com/DEUDEOS-Team/deos-protocol
