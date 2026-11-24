@@ -56,6 +56,35 @@ class TestFraming(unittest.TestCase):
         self.assertEqual(decoded.sequence, frame.sequence)
         self.assertEqual(decoded.payload, frame.payload)
 
+    def test_universal_9b_c_engine_names_and_limits(self):
+        frame = UniversalDeosFrame(
+            destination=0x03,
+            source=0x02,
+            priority=0x01,
+            version=0x11,
+            message_class=0x01,
+            service=0x00,
+            command=0x02,
+            sequence=7,
+            payload=b"\x05",
+        )
+        self.assertEqual(frame.destination_name, "MAIN_STM32")
+        self.assertEqual(frame.source_name, "GROUND_CONTROL")
+        self.assertEqual(frame.class_name, "COMMAND")
+        self.assertEqual(frame.service_name, "SYSTEM")
+        self.assertEqual(frame.command_name, "SET_STATE")
+
+        # Oversized payload (> 60B) rejected by C encoder wrapper
+        bad_frame = UniversalDeosFrame(destination=0x03, source=0x02, priority=1, payload=b"A" * 61)
+        with self.assertRaises(ValueError):
+            bad_frame.encode(layout="UNIVERSAL_9B")
+
+        # Truncated header or truncated payload rejected by C decoder
+        with self.assertRaises(ValueError):
+            UniversalDeosFrame.decode(b"\x03\x02\x01\x11\x01\x00\x02\x07", layout="UNIVERSAL_9B")
+        with self.assertRaises(ValueError):
+            UniversalDeosFrame.decode(b"\x03\x02\x01\x11\x01\x00\x02\x07\x04\x01", layout="UNIVERSAL_9B")
+
     def test_common_8b_symmetry(self):
         frame = UniversalDeosFrame(
             destination=0x03,

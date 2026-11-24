@@ -132,10 +132,12 @@ class SystemCommand(IntEnum):
 class TractionCommand(IntEnum):
     """TRACTION Service Command Registry (DOC-ICD-NODE-TRAC-008)."""
     SET_SPEED = 0x01
+    SET_TARGET_SPEED = 0x01
     GET_STATUS = 0x02
     STATUS = 0x02
     SET_GEAR = 0x04
     SET_TORQUE = 0x05
+    SET_TORQUE_LIMIT = 0x05
 
 
 class SteeringCommand(IntEnum):
@@ -144,16 +146,20 @@ class SteeringCommand(IntEnum):
     GET_STATUS = 0x02
     STATUS = 0x02
     SET_CONTROL_MODE = 0x04
+    SET_MODE = 0x04
 
 
 class BrakeCommand(IntEnum):
     """BRAKE Service Command Registry (DOC-ICD-NODE-BRK-010)."""
     SET_DEMAND = 0x01
+    SET_TARGET = 0x01
     GET_STATUS = 0x02
     STATUS = 0x02
     SET_DECELERATION = 0x03
     SET_CONTROL_MODE = 0x04
+    SET_MODE = 0x04
     SET_PARK_BRAKE = 0x05
+    SET_PARK = 0x05
     SET_PREFILL = 0x06
 
 
@@ -169,11 +175,31 @@ class BmsCommand(IntEnum):
     BALANCING = 0x08
 
 
+class CalibrationCommand(IntEnum):
+    """CALIBRATION Service Command Registry (deos_icd.h)."""
+    START = 0x01
+    CAL_START = 0x01
+    ABORT = 0x02
+    CAL_ABORT = 0x02
+    GET_STATUS = 0x03
+    CAL_GET_STATUS = 0x03
+    SAVE_RESULT = 0x04
+    CAL_SAVE_RESULT = 0x04
+    CLEAR_RESULT = 0x05
+    CAL_CLEAR_RESULT = 0x05
+
+
 class DiagnosticCommand(IntEnum):
     """DIAGNOSTIC Service Command Registry (DOC-ICD-DIAG-004 v1.2)."""
     GET_HEALTH = 0x01
     GET_FAULTS = 0x02
     CLEAR_FAULTS = 0x03
+
+
+class SensorsCommand(IntEnum):
+    """SENSORS Service Command Registry (deos_icd.h)."""
+    IMU_DATA = 0x01
+    SENSOR_IMU_DATA = 0x01
 
 
 class LightingCommand(IntEnum):
@@ -311,4 +337,25 @@ class ParkBrakeState(IntEnum):
     """Brake Park Brake State (DOC-ICD-NODE-BRK-010)."""
     RELEASED = 0
     ENGAGED = 1
+
+
+class HardwareType(IntEnum):
+    """Hardware Platform Type Identifiers (deos_types.h: deos_hw_type_t)."""
+    UNKNOWN = 0x00
+    STM32H5 = 0x01
+    STM32F4 = 0x02
+    LINUX_PC = 0x03
+    ESP32 = 0x04
+
+
+class TransportType(IntEnum):
+    """DEOS Physical Transport Identifiers (deos_types.h: deos_transport_t)."""
+    LOCAL = 0x00
+    CAN_FD = 0x01
+    ETH_TEXTUAL = 0x02
+    ETH_ROS_BRIDGE = 0x03
+    UART_LORA = 0x04
+    COUNT = 0x05
+    BROADCAST_ALL = 0xFE
+    UNKNOWN = 0xFF
 

@@ -14,6 +14,15 @@ import struct
 from dataclasses import dataclass, field
 from typing import List, Tuple, Union
 
+from .c_bridge import (
+    DEOS_MAX_PAYLOAD_LEN,
+    c_class_name,
+    c_command_name,
+    c_decode_frame,
+    c_encode_frame,
+    c_node_name,
+    c_service_name,
+)
 from .crc import crc16_ccitt
 from .enums import DEOS_VERSION, LORA_MAGIC, LoraFlag
 
@@ -36,36 +45,49 @@ class UniversalDeosFrame:
     sequence: int = 0
     payload: bytes = field(default_factory=bytes)
 
+    @property
+    def destination_name(self) -> str:
+        """Symbolic node name resolved via C `deos_node_name`."""
+        return c_node_name(self.destination)
+
+    @property
+    def source_name(self) -> str:
+        """Symbolic source node name resolved via C `deos_node_name`."""
+        return c_node_name(self.source)
+
+    @property
+    def service_name(self) -> str:
+        """Symbolic service name resolved via C `deos_service_name`."""
+        return c_service_name(self.service)
+
+    @property
+    def class_name(self) -> str:
+        """Symbolic message class name resolved via C `deos_class_name`."""
+        return c_class_name(self.message_class)
+
+    @property
+    def command_name(self) -> str:
+        """Symbolic command name resolved via C `deos_command_name`."""
+        return c_command_name(self.service, self.command)
+
     def encode(self, layout: str = DEFAULT_FRAME_LAYOUT) -> bytes:
         """Encode the DEOS frame into pure media-independent binary bytes.
 
         Does NOT add 0xAA 0x55, Flag, Length, or CRC16.
+        `UNIVERSAL_9B` executes directly through the C `deos_frame_encode` engine.
         """
-        plen = len(self.payload)
         if layout == "UNIVERSAL_9B":
-            # DOC-ICD-CORE-001 Section 9.1:
-            # 0: destination
-            # 1: source
-            # 2: priority
-            # 3: version
-            # 4: message_class
-            # 5: service
-            # 6: command
-            # 7: sequence
-            # 8: payload_length
-            header = struct.pack(
-                "<9B",
-                self.destination & 0xFF,
-                self.source & 0xFF,
-                self.priority & 0xFF,
-                self.version & 0xFF,
-                self.message_class & 0xFF,
-                self.service & 0xFF,
-                self.command & 0xFF,
-                self.sequence & 0xFF,
-                plen & 0xFF,
+            return c_encode_frame(
+                destination=self.destination,
+                source=self.source,
+                priority=self.priority,
+                message_class=self.message_class,
+                service=self.service,
+                command=self.command,
+                sequence=self.sequence,
+                payload=self.payload,
+                version=self.version,
             )
-            return header + self.payload
 
         elif layout == "COMMON_8B":
             # DOC-ICD-TRP-LORA-007:
@@ -97,31 +119,17 @@ class UniversalDeosFrame:
     def decode(cls, data: bytes, layout: str = DEFAULT_FRAME_LAYOUT) -> "UniversalDeosFrame":
         """Decode a pure media-independent binary frame into UniversalDeosFrame."""
         if layout == "UNIVERSAL_9B":
-            if len(data) < 9:
-                raise ValueError(f"Frame data too short for UNIVERSAL_9B: {len(data)} < 9 bytes")
-            (
-                dest,
-                src,
-                prio,
-                ver,
-                msg_class,
-                service,
-                cmd,
-                seq,
-                plen,
-            ) = struct.unpack("<9B", data[:9])
-
-            payload = data[9 : 9 + plen]
+            decoded = c_decode_frame(data)
             return cls(
-                destination=dest,
-                source=src,
-                priority=prio,
-                version=ver,
-                message_class=msg_class,
-                service=service,
-                command=cmd,
-                sequence=seq,
-                payload=payload,
+                destination=decoded.destination,
+                source=decoded.source,
+                priority=decoded.priority,
+                version=decoded.version,
+                message_class=decoded.message_class,
+                service=decoded.service,
+                command=decoded.command,
+                sequence=decoded.sequence,
+                payload=decoded.payload,
             )
 
         elif layout == "COMMON_8B":

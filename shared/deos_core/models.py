@@ -14,12 +14,14 @@ from pydantic import BaseModel, Field, model_validator
 from .enums import (
     BmsCommand,
     BrakeCommand,
+    CalibrationCommand,
     ConfigCommand,
     DiagnosticCommand,
     LightingCommand,
     MessageClass,
     NodeId,
     Priority,
+    SensorsCommand,
     ServiceId,
     SteeringCommand,
     SystemCommand,
@@ -149,6 +151,15 @@ class CommandRequest(BaseModel):
                     self.message_class = MessageClass.REQUEST
                 else:
                     self.message_class = MessageClass.COMMAND
+
+            elif srv == ServiceId.CALIBRATION:
+                if cmd == CalibrationCommand.GET_STATUS:
+                    self.message_class = MessageClass.REQUEST
+                else:
+                    self.message_class = MessageClass.COMMAND
+
+            elif srv == ServiceId.SENSORS:
+                self.message_class = MessageClass.REQUEST
 
             elif cmd == ConfigCommand.GET_PARAMETER:
                 self.message_class = MessageClass.REQUEST
