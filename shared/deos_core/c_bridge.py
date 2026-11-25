@@ -411,9 +411,26 @@ def c_class_name(msg_class: int) -> str:
     return get_lib().deos_class_name(msg_class & 0xFF).decode("utf-8")
 
 
+_ICD_PARAM_CMD_NAMES = {
+    0xE0: "GET_PARAMETER",
+    0xE1: "SET_PARAMETER",
+    0xE2: "SAVE_PARAMETERS",
+    0xE3: "RESTORE_DEFAULTS",
+    0xE4: "GET_PARAMETER_INFO",
+}
+
+
 def c_command_name(service_id: int, command_id: int) -> str:
-    """Return official C command name string for `(service_id, command_id)`."""
-    return get_lib().deos_command_name(service_id & 0xFF, command_id & 0xFF).decode("utf-8")
+    """Return official C command name string, falling back to `deos_icd.h` for SENSORS/PARAM commands."""
+    srv = service_id & 0xFF
+    cmd = command_id & 0xFF
+    name = get_lib().deos_command_name(srv, cmd).decode("utf-8")
+    if name == "UNKNOWN_CMD":
+        if cmd in _ICD_PARAM_CMD_NAMES:
+            return _ICD_PARAM_CMD_NAMES[cmd]
+        if (srv, cmd) == (0x07, 0x01):
+            return "SENSOR_IMU_DATA"
+    return name
 
 
 def _extract_codec_slice(

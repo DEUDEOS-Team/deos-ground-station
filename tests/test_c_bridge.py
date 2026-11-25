@@ -151,6 +151,9 @@ int main(void) {
 
         self.assertEqual(c_command_name(0x00, 0x02), "SET_STATE")
         self.assertEqual(c_command_name(0x01, 0x01), "SET_TARGET_SPEED")
+        self.assertEqual(c_command_name(0x07, 0x01), "SENSOR_IMU_DATA")
+        self.assertEqual(c_command_name(0x02, 0xE1), "SET_PARAMETER")
+        self.assertEqual(c_command_name(0x01, 0xE0), "GET_PARAMETER")
         self.assertEqual(c_command_name(0x00, 0xEE), "UNKNOWN_CMD")
 
         self.assertEqual(c_transport_name(4), "UART_LORA")

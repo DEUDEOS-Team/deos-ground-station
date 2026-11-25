@@ -581,7 +581,7 @@ function updateSubCommandOptions() {
     const cmdSelect = document.getElementById("subCommandSelect");
     cmdSelect.innerHTML = "";
 
-    const srvNames = { 0: "SYSTEM", 1: "TRACTION", 2: "STEERING", 3: "BRAKE", 4: "BMS", 8: "LIGHTING" };
+    const srvNames = { 0: "SYSTEM", 1: "TRACTION", 2: "STEERING", 3: "BRAKE", 4: "BMS", 7: "SENSORS", 8: "LIGHTING" };
     const srvName = srvNames[srvId] || "SYSTEM";
     const cmds = registryData.commands[srvName] || [];
 
