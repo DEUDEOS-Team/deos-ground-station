@@ -17,13 +17,18 @@ import logging
 import os
 import threading
 import time
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
 import paho.mqtt.client as mqtt
 import serial
 
 from deos_core import (
     LoraFlag,
+    c_class_name,
+    c_command_name,
+    c_decode_frame,
+    c_node_name,
+    c_service_name,
     create_lora_ack,
     unwrap_lora_stream,
     wrap_lora_packet,
@@ -43,6 +48,50 @@ ACK_TIMEOUT_MS = int(os.getenv("ACK_TIMEOUT_MS", "1200"))
 MAX_RETRIES = int(os.getenv("MAX_RETRIES", "3"))
 SERIAL_MOCK = os.getenv("SERIAL_MOCK", "false").lower() in ("true", "1", "yes")
 MOCK_AUTO_ACK = os.getenv("MOCK_AUTO_ACK", "false").lower() in ("true", "1", "yes")
+
+
+def build_frame_info(deos_frame: bytes) -> Optional[Dict[str, Any]]:
+    """Decode pure DEOS frame metadata and resolve official C symbolic names."""
+    if len(deos_frame) < 9:
+        return None
+
+    try:
+        decoded = c_decode_frame(deos_frame)
+        return {
+            "dest": f"0x{decoded.destination:02X}",
+            "dest_name": decoded.destination_name,
+            "src": f"0x{decoded.source:02X}",
+            "src_name": decoded.source_name,
+            "priority": decoded.priority,
+            "version": f"0x{decoded.version:02X}",
+            "message_class": decoded.message_class,
+            "class_name": decoded.class_name,
+            "service": f"0x{decoded.service:02X}",
+            "service_name": decoded.service_name,
+            "command": f"0x{decoded.command:02X}",
+            "command_name": decoded.command_name,
+            "sequence": decoded.sequence,
+            "payload": " ".join(f"{b:02X}" for b in decoded.payload),
+        }
+    except ValueError:
+        dest, src, prio, ver, msg_cls, srv, cmd, seq, plen = deos_frame[:9]
+        payload_bytes = deos_frame[9 : 9 + plen] if len(deos_frame) >= 9 + plen else deos_frame[9:]
+        return {
+            "dest": f"0x{dest:02X}",
+            "dest_name": c_node_name(dest),
+            "src": f"0x{src:02X}",
+            "src_name": c_node_name(src),
+            "priority": prio,
+            "version": f"0x{ver:02X}",
+            "message_class": msg_cls,
+            "class_name": c_class_name(msg_cls),
+            "service": f"0x{srv:02X}",
+            "service_name": c_service_name(srv),
+            "command": f"0x{cmd:02X}",
+            "command_name": c_command_name(srv, cmd),
+            "sequence": seq,
+            "payload": " ".join(f"{b:02X}" for b in payload_bytes),
+        }
 
 
 class PendingARQ:
@@ -134,13 +183,26 @@ class LinkerService:
             )
             return
 
+        frame_info = build_frame_info(deos_frame)
+        sym_summary = ""
+        if frame_info:
+            sym_summary = (
+                f" | {frame_info['src_name']}({frame_info['src']}) -> "
+                f"{frame_info['dest_name']}({frame_info['dest']}) "
+                f"Class={frame_info['class_name']}({frame_info['message_class']}) "
+                f"Svc={frame_info['service_name']}({frame_info['service']}) "
+                f"Cmd={frame_info['command_name']}({frame_info['command']}) "
+                f"Seq={frame_info['sequence']}"
+            )
+
         logger.info(
-            "TX [%s]: Flag=0x%02X Len=%d CRC=0x%04X (Total wire=%d bytes)",
+            "TX [%s]: Flag=0x%02X Len=%d CRC=0x%04X (Total wire=%d bytes)%s",
             "RELIABLE" if is_reliable else "UNRELIABLE",
             flag,
             len(deos_frame),
             packet_crc,
             len(wire_packet),
+            sym_summary,
         )
 
         if is_reliable:
@@ -150,22 +212,6 @@ class LinkerService:
         self.write_to_serial(wire_packet)
 
         # Report TX status to command/status
-        frame_info = None
-        if len(deos_frame) >= 9:
-            plen = deos_frame[8]
-            payload_bytes = deos_frame[9 : 9 + plen] if len(deos_frame) >= 9 + plen else deos_frame[9:]
-            frame_info = {
-                "dest": f"0x{deos_frame[0]:02X}",
-                "src": f"0x{deos_frame[1]:02X}",
-                "priority": deos_frame[2],
-                "version": f"0x{deos_frame[3]:02X}",
-                "message_class": deos_frame[4],
-                "service": f"0x{deos_frame[5]:02X}",
-                "command": f"0x{deos_frame[6]:02X}",
-                "sequence": deos_frame[7],
-                "payload": " ".join(f"{b:02X}" for b in payload_bytes),
-            }
-
         status_msg = {
             "status": "SENT_AWAITING_ACK" if is_reliable else "SENT_NO_ACK_REQUIRED",
             "crc": f"0x{packet_crc:04X}",
@@ -234,7 +280,20 @@ class LinkerService:
                 self.write_to_serial(ack_packet)
 
             # Strip L2 Envelope: payload_bytes is the pure DEOS Universal Frame!
-            logger.info("Deframed pure DEOS frame (%d bytes), publishing to lora/rx/frame", len(payload_bytes))
+            rx_info = build_frame_info(payload_bytes)
+            rx_summary = ""
+            if rx_info:
+                rx_summary = (
+                    f" | {rx_info['src_name']}({rx_info['src']}) -> "
+                    f"{rx_info['dest_name']}({rx_info['dest']}) "
+                    f"Class={rx_info['class_name']} Svc={rx_info['service_name']} "
+                    f"Cmd={rx_info['command_name']} Seq={rx_info['sequence']}"
+                )
+            logger.info(
+                "Deframed pure DEOS frame (%d bytes)%s, publishing to lora/rx/frame",
+                len(payload_bytes),
+                rx_summary,
+            )
             self.mqtt_client.publish("lora/rx/frame", payload_bytes)
 
     def arq_watchdog_loop(self):

@@ -1,8 +1,9 @@
-"""DEOS Encoder Microservice (Stateless).
+"""DEOS Encoder Microservice (Stateless, C-Struct Payload Packing).
 
 Receives JSON commands from `command/request`, validates them against ICD constraints,
-builds a media-independent Universal DEOS Transport Frame, and publishes pure raw frame
-bytes to either `lora/tx/reliable` (when ack=True) or `lora/tx/unreliable` (when ack=False).
+packs payloads using `deos_types.h` C structs (`payloads.py`), builds a media-independent
+Universal DEOS Transport Frame via the C engine, and publishes pure raw frame bytes to
+either `lora/tx/reliable` (when ack=True) or `lora/tx/unreliable` (when ack=False).
 
 CRITICAL RULE:
 Yer istasyonu kesinlikle 29-bit CAN ID veya CAN Frame üretmez.
@@ -13,8 +14,6 @@ Yalnızca medya bağımsız Saf DEOS Evrensel Çerçevesi üretir.
 import json
 import logging
 import os
-import struct
-import sys
 import time
 from typing import Any, Dict
 
@@ -24,17 +23,38 @@ from pydantic import ValidationError
 from deos_core import (
     BmsCommand,
     BrakeCommand,
+    BrakeModePayload,
+    BrakeParkPayload,
+    BrakePrefillPayload,
+    BrakeTargetPayload,
+    CalibrationCommand,
     ConfigCommand,
     DEOS_VERSION,
     DiagnosticCommand,
+    HeartbeatPayload,
     LightingCommand,
+    LightingCommandPayload,
     NodeId,
+    ParameterHeaderPayload,
+    PingPongPayload,
+    ResetNodePayload,
+    SensorsCommand,
     ServiceId,
     SteeringCommand,
+    SteeringModePayload,
+    SteeringTargetPayload,
+    SubscribeReqPayload,
     SystemCommand,
+    SystemModePayload,
+    SystemStatePayload,
     TractionCommand,
+    TractionGearPayload,
+    TractionTargetPayload,
+    TractionTorqueLimitPayload,
     UniversalDeosFrame,
+    UnsubscribeReqPayload,
     get_parameter_info,
+    pack_parameter_payload,
     to_raw,
 )
 from deos_core.models import CommandRequest
@@ -61,88 +81,134 @@ def next_sequence() -> int:
     return seq
 
 
+def _clamp_u16(value: int) -> int:
+    return max(0, min(0xFFFF, int(value)))
+
+
+def _clamp_i16(value: int) -> int:
+    return max(-32768, min(32767, int(value)))
+
+
+def _extract_raw_payload(params: Dict[str, Any]) -> bytes:
+    if "raw_payload" in params and params["raw_payload"] is not None:
+        raw = params["raw_payload"]
+        if isinstance(raw, str):
+            return bytes.fromhex(raw)
+        if isinstance(raw, (list, bytes, bytearray)):
+            return bytes(raw)
+    return b""
+
+
 def pack_payload(service: int, command: int, params: Dict[str, Any]) -> bytes:
-    """Pack command-specific parameters into Little-Endian bytes."""
+    """Pack command-specific parameters into Little-Endian C struct bytes (`deos_types.h`)."""
+    # 0. Common Parameter Configuration (0xE0 - 0xE4 across any service)
+    if command in (ConfigCommand.GET_PARAMETER, ConfigCommand.GET_PARAMETER_INFO):
+        param_id = int(params.get("param_id", 0)) & 0xFFFF
+        return ParameterHeaderPayload(parameter_id=param_id).to_bytes()
+    elif command == ConfigCommand.SET_PARAMETER:
+        param_id = int(params.get("param_id", 0)) & 0xFFFF
+        param_info = get_parameter_info(service, param_id)
+        val = float(params.get("value", 0.0))
+        scale = param_info.scale if param_info else 1.0
+        raw_val = to_raw(val, scale)
+        data_type = param_info.data_type if param_info else "uint16"
+        return pack_parameter_payload(param_id, data_type, raw_val)
+    elif command in (ConfigCommand.SAVE_PARAMETERS, ConfigCommand.RESTORE_DEFAULTS):
+        return b""
+
     # 1. SYSTEM Service
     if service == ServiceId.SYSTEM:
-        if command in (SystemCommand.GET_STATE, SystemCommand.GET_MODE, SystemCommand.GET_NODE_INFO):
+        if command in (
+            SystemCommand.GET_STATE,
+            SystemCommand.GET_MODE,
+            SystemCommand.GET_NODE_INFO,
+            SystemCommand.GET_SUBSCRIPTIONS,
+        ):
             return b""
         elif command == SystemCommand.SET_STATE:
-            return struct.pack("<B", int(params.get("target_state", 0)) & 0xFF)
+            return SystemStatePayload(state=int(params.get("target_state", 0)) & 0xFF).to_bytes()
         elif command == SystemCommand.SET_MODE:
-            return struct.pack("<B", int(params.get("target_mode", 0)) & 0xFF)
+            return SystemModePayload(mode=int(params.get("target_mode", 0)) & 0xFF).to_bytes()
         elif command == SystemCommand.RESET_NODE:
-            return struct.pack("<B", int(params.get("subcommand", 0)) & 0xFF)
+            return ResetNodePayload(subcommand=int(params.get("subcommand", 0)) & 0xFF).to_bytes()
         elif command == SystemCommand.HEARTBEAT:
-            return struct.pack("<B", int(params.get("current_state", 0x03)) & 0xFF)
+            return HeartbeatPayload(current_state=int(params.get("current_state", 0x03)) & 0xFF).to_bytes()
         elif command in (SystemCommand.PING, SystemCommand.PONG):
-            ping_id = int(params.get("ping_id", int(time.time() * 1000) & 0xFFFFFFFF))
-            return struct.pack("<I", ping_id)
+            ping_id = int(params.get("ping_id", int(time.time() * 1000))) & 0xFFFFFFFF
+            return PingPongPayload(ping_id=ping_id).to_bytes()
         elif command == SystemCommand.SUBSCRIBE:
-            target_service = int(params.get("target_service", 0)) & 0xFF
-            target_command = int(params.get("target_command", 0)) & 0xFF
-            interval_ms = int(params.get("interval_ms", 100)) & 0xFFFF
-            lease_ttl_s = int(params.get("lease_ttl_s", 0)) & 0xFFFF
-            return struct.pack("<BBHH", target_service, target_command, interval_ms, lease_ttl_s)
+            return SubscribeReqPayload(
+                target_service=int(params.get("target_service", 0)) & 0xFF,
+                target_command=int(params.get("target_command", 0)) & 0xFF,
+                interval_ms=int(params.get("interval_ms", 100)) & 0xFFFF,
+                lease_ttl_s=int(params.get("lease_ttl_s", 0)) & 0xFFFF,
+            ).to_bytes()
         elif command == SystemCommand.UNSUBSCRIBE:
-            target_service = int(params.get("target_service", 0)) & 0xFF
-            target_command = int(params.get("target_command", 0xFF)) & 0xFF
-            return struct.pack("<BB", target_service, target_command)
+            return UnsubscribeReqPayload(
+                target_service=int(params.get("target_service", 0)) & 0xFF,
+                target_command=int(params.get("target_command", 0xFF)) & 0xFF,
+            ).to_bytes()
 
-    # 2. TRACTION Service
+    # 2. TRACTION Service (4-byte deos_traction_target_payload)
     elif service == ServiceId.TRACTION:
-        if command == TractionCommand.SET_SPEED:
+        if command == TractionCommand.SET_TARGET_SPEED:
             spd = float(params.get("target_speed", 0.0))
-            spd_raw = to_raw(spd, 0.01)
-            if "target_accel" in params and params["target_accel"] is not None:
-                acc = float(params["target_accel"])
-                acc_raw = to_raw(acc, 0.01)
-                return struct.pack("<HH", spd_raw & 0xFFFF, acc_raw & 0xFFFF)
-            return struct.pack("<H", spd_raw & 0xFFFF)
+            acc_param = params.get("target_accel")
+            acc = float(acc_param) if acc_param is not None else 0.0
+            return TractionTargetPayload(
+                target_speed=_clamp_u16(to_raw(spd, 0.01)),
+                target_accel=_clamp_i16(to_raw(acc, 0.01)),
+            ).to_bytes()
         elif command == TractionCommand.GET_STATUS:
             return b""
         elif command == TractionCommand.SET_GEAR:
-            return struct.pack("<B", int(params.get("target_gear", 0)) & 0xFF)
-        elif command == TractionCommand.SET_TORQUE:
-            torque = float(params.get("dynamic_torque_limit", 100.0))
-            t_raw = to_raw(torque, 0.01)
-            return struct.pack("<H", t_raw & 0xFFFF)
+            gear_val = int(params.get("target_gear", params.get("gear", 0))) & 0xFF
+            return TractionGearPayload(gear=gear_val).to_bytes()
+        elif command == TractionCommand.SET_TORQUE_LIMIT:
+            torque = float(params.get("dynamic_torque_limit", params.get("torque_limit", 100.0)))
+            return TractionTorqueLimitPayload(
+                torque_limit=_clamp_u16(to_raw(torque, 0.01)),
+            ).to_bytes()
 
-    # 3. STEERING Service
+    # 3. STEERING Service (4-byte deos_steering_target_payload)
     elif service == ServiceId.STEERING:
         if command == SteeringCommand.SET_TARGET_ANGLE:
             ang = float(params.get("target_angle", 0.0))
-            ang_raw = to_raw(ang, 0.01)
-            if "target_angular_velocity" in params and params["target_angular_velocity"] is not None:
-                vel = float(params["target_angular_velocity"])
-                vel_raw = to_raw(vel, 0.01)
-                return struct.pack("<hH", ang_raw, vel_raw & 0xFFFF)
-            return struct.pack("<h", ang_raw)
+            vel_param = params.get("target_angular_velocity")
+            vel = float(vel_param) if vel_param is not None else 0.0
+            return SteeringTargetPayload(
+                target_angle=_clamp_i16(to_raw(ang, 0.01)),
+                target_angular_velocity=_clamp_u16(to_raw(vel, 0.01)),
+            ).to_bytes()
         elif command == SteeringCommand.GET_STATUS:
             return b""
-        elif command == SteeringCommand.SET_CONTROL_MODE:
-            return struct.pack("<B", int(params.get("steering_control_mode", 0)) & 0xFF)
+        elif command == SteeringCommand.SET_MODE:
+            mode_val = int(params.get("mode", params.get("steering_control_mode", 0))) & 0xFF
+            return SteeringModePayload(mode=mode_val).to_bytes()
 
-    # 4. BRAKE Service
+    # 4. BRAKE Service (4-byte deos_brake_target_payload)
     elif service == ServiceId.BRAKE:
-        if command == BrakeCommand.SET_DEMAND:
-            demand = float(params.get("target_brake_demand", 0.0))
-            d_raw = to_raw(demand, 0.01)
-            return struct.pack("<H", d_raw & 0xFFFF)
+        if command == BrakeCommand.SET_TARGET:
+            demand_param = params.get("target_brake_demand")
+            decel_param = params.get("target_deceleration")
+            demand = float(demand_param) if demand_param is not None else 0.0
+            decel = float(decel_param) if decel_param is not None else 0.0
+            return BrakeTargetPayload(
+                target_brake_demand=_clamp_u16(to_raw(demand, 0.01)),
+                target_deceleration=_clamp_i16(to_raw(decel, 0.01)),
+            ).to_bytes()
         elif command == BrakeCommand.GET_STATUS:
             return b""
-        elif command == BrakeCommand.SET_DECELERATION:
-            if "estop_brake_override" in params and params["estop_brake_override"] is not None:
-                return struct.pack("<B", 1 if params["estop_brake_override"] else 0)
-            decel = float(params.get("target_deceleration", 0.0))
-            dec_raw = to_raw(decel, 0.01)
-            return struct.pack("<H", dec_raw & 0xFFFF)
-        elif command == BrakeCommand.SET_CONTROL_MODE:
-            return struct.pack("<B", int(params.get("brake_control_mode", 0)) & 0xFF)
-        elif command == BrakeCommand.SET_PARK_BRAKE:
-            return struct.pack("<B", int(params.get("target_park_brake", 0)) & 0xFF)
+        elif command == BrakeCommand.SET_MODE:
+            mode_val = int(params.get("mode", params.get("brake_control_mode", 0))) & 0xFF
+            return BrakeModePayload(mode=mode_val).to_bytes()
+        elif command == BrakeCommand.SET_PARK:
+            return BrakeParkPayload(
+                target_park_brake=int(params.get("target_park_brake", 0)) & 0xFF,
+            ).to_bytes()
         elif command == BrakeCommand.SET_PREFILL:
-            return struct.pack("<B", 1 if params.get("brake_prefill_cmd") else 0)
+            prefill_val = params.get("brake_prefill_cmd", params.get("prefill_cmd", False))
+            return BrakePrefillPayload(prefill_cmd=1 if prefill_val else 0).to_bytes()
 
     # 5. BMS Service
     elif service == ServiceId.BMS:
@@ -154,57 +220,38 @@ def pack_payload(service: int, command: int, params: Dict[str, Any]) -> bytes:
         ):
             return b""
 
-    # 6. DIAGNOSTIC Service
+    # 6. CALIBRATION Service
+    elif service == ServiceId.CALIBRATION:
+        if command in (
+            CalibrationCommand.START,
+            CalibrationCommand.ABORT,
+            CalibrationCommand.GET_STATUS,
+            CalibrationCommand.SAVE_RESULT,
+            CalibrationCommand.CLEAR_RESULT,
+        ):
+            return _extract_raw_payload(params)
+
+    # 7. DIAGNOSTIC Service
     elif service == ServiceId.DIAGNOSTIC:
         if command in (DiagnosticCommand.GET_HEALTH, DiagnosticCommand.GET_FAULTS, DiagnosticCommand.CLEAR_FAULTS):
             return b""
 
-    # 7. LIGHTING Service
+    # 8. SENSORS Service
+    elif service == ServiceId.SENSORS:
+        if command == SensorsCommand.IMU_DATA:
+            return b""
+
+    # 9. LIGHTING Service
     elif service == ServiceId.LIGHTING:
         if command in (LightingCommand.TURN_ON, LightingCommand.TURN_OFF):
             light_id = int(params.get("light_id", 0x01)) & 0xFF
-            return struct.pack("<B", light_id)
+            return LightingCommandPayload(light_id=light_id).to_bytes()
         elif command == LightingCommand.GET_STATUS:
             if "light_id" in params and params["light_id"] is not None:
-                return struct.pack("<B", int(params["light_id"]) & 0xFF)
+                return LightingCommandPayload(light_id=int(params["light_id"]) & 0xFF).to_bytes()
             return b""
 
-    # 8. Common Parameter Configuration (0xE0 - 0xE4)
-    if command == ConfigCommand.GET_PARAMETER:
-        param_id = int(params.get("param_id", 0)) & 0xFFFF
-        return struct.pack("<H", param_id)
-    elif command == ConfigCommand.SET_PARAMETER:
-        param_id = int(params.get("param_id", 0)) & 0xFFFF
-        param_info = get_parameter_info(service, param_id)
-        val = float(params.get("value", 0.0))
-        scale = param_info.scale if param_info else 1.0
-        raw_val = to_raw(val, scale)
-        data_type = param_info.data_type if param_info else "uint16"
-
-        if data_type == "uint8":
-            return struct.pack("<HB", param_id, raw_val & 0xFF)
-        elif data_type == "int8":
-            return struct.pack("<Hb", param_id, raw_val)
-        elif data_type == "int16":
-            return struct.pack("<Hh", param_id, raw_val)
-        elif data_type == "uint32":
-            return struct.pack("<HI", param_id, raw_val & 0xFFFFFFFF)
-        elif data_type == "int32":
-            return struct.pack("<Hi", param_id, raw_val)
-        else:  # uint16 default
-            return struct.pack("<HH", param_id, raw_val & 0xFFFF)
-    elif command in (ConfigCommand.SAVE_PARAMETERS, ConfigCommand.RESTORE_DEFAULTS):
-        return b""
-
-    # If raw payload provided in params, use it
-    if "raw_payload" in params:
-        raw = params["raw_payload"]
-        if isinstance(raw, str):
-            return bytes.fromhex(raw)
-        elif isinstance(raw, list):
-            return bytes(raw)
-
-    return b""
+    return _extract_raw_payload(params)
 
 
 def on_connect(client, userdata, flags, rc, properties=None):
@@ -263,10 +310,14 @@ def on_message(client, userdata, msg):
     target_topic = "lora/tx/reliable" if cmd_req.ack else "lora/tx/unreliable"
     client.publish(target_topic, wire_frame)
     logger.info(
-        "Encoded & published [%s] -> Dest=0x%02X Srv=0x%02X Cmd=0x%02X Seq=%d Len=%d to %s",
+        "Encoded & published [%s] -> %s(0x%02X) Class=%s Svc=%s(0x%02X) Cmd=%s(0x%02X) Seq=%d Len=%d to %s",
         FRAME_LAYOUT,
+        frame.destination_name,
         cmd_req.destination,
+        frame.class_name,
+        frame.service_name,
         cmd_req.service,
+        frame.command_name,
         cmd_req.command,
         seq,
         len(wire_frame),
@@ -293,4 +344,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

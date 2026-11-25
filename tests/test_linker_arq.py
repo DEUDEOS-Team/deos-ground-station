@@ -1,5 +1,6 @@
 """Unit tests for Linker L2 transport wrapping, deframing, and ARQ mechanism."""
 
+import json
 import unittest
 import sys
 import os
@@ -10,6 +11,12 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../s
 
 from deos_core import (
     LoraFlag,
+    MessageClass,
+    NodeId,
+    Priority,
+    ServiceId,
+    SystemCommand,
+    UniversalDeosFrame,
     wrap_lora_packet,
     create_lora_ack,
     unwrap_lora_stream,
@@ -114,6 +121,35 @@ class TestLinkerArq(unittest.TestCase):
         # Should publish ERROR_NO_HARDWARE to command/status!
         statuses = [p[1] for p in self.published_mqtt if p[0] == "command/status"]
         self.assertTrue(any("ERROR_NO_HARDWARE" in s for s in statuses))
+
+    def test_tx_status_includes_c_symbolic_frame_info(self):
+        set_state_frame = UniversalDeosFrame(
+            destination=NodeId.MAIN_STM32,
+            source=NodeId.GROUND_CONTROL,
+            priority=Priority.CRITICAL_CONTROL,
+            message_class=MessageClass.COMMAND,
+            service=ServiceId.SYSTEM,
+            command=SystemCommand.SET_STATE,
+            sequence=9,
+            payload=b"\x05",
+        ).encode(layout="UNIVERSAL_9B")
+
+        class DummyMsg:
+            topic = "lora/tx/reliable"
+            payload = set_state_frame
+
+        self.linker.on_mqtt_message(None, None, DummyMsg())
+
+        statuses = [json.loads(p[1]) for p in self.published_mqtt if p[0] == "command/status"]
+        self.assertEqual(len(statuses), 1)
+        info = statuses[0]["frame_info"]
+        self.assertIsNotNone(info)
+        self.assertEqual(info["dest_name"], "MAIN_STM32")
+        self.assertEqual(info["src_name"], "GROUND_CONTROL")
+        self.assertEqual(info["class_name"], "COMMAND")
+        self.assertEqual(info["service_name"], "SYSTEM")
+        self.assertEqual(info["command_name"], "SET_STATE")
+        self.assertEqual(info["payload"], "05")
 
 
 if __name__ == "__main__":

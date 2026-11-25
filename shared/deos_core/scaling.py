@@ -63,5 +63,10 @@ SIGNALS: Dict[str, SignalSpec] = {
     "bms_temp": SignalSpec("bms_temp", 0.1, 0.0, "°C", "BMS temperature"),
     "bms_cell_voltage": SignalSpec("cell_voltage", 0.001, 0.0, "V", "Individual cell voltage"),
     "bms_sensor_temp": SignalSpec("sensor_temp", 0.1, 0.0, "°C", "Battery module temperature sensor"),
+
+    # Sensors / IMU
+    "imu_accel": SignalSpec("accel", 0.01, 0.0, "m/s²", "IMU 3-axis linear acceleration"),
+    "imu_gyro": SignalSpec("gyro", 0.01, 0.0, "deg/s", "IMU 3-axis angular rate"),
+    "imu_mag": SignalSpec("mag", 1.0, 0.0, "uT", "IMU 3-axis magnetic field"),
 }
 

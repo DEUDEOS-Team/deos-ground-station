@@ -30,6 +30,8 @@ from deos_core import (
     DiagnosticCommand,
     LightingCommand,
     ConfigCommand,
+    SensorImuPayload,
+    SensorsCommand,
     UniversalDeosFrame,
     DEOS_INTERVAL_ON_CHANGE,
     END_OF_FAULT_LIST,
@@ -148,19 +150,27 @@ class TestEncoderDecoderSymmetry(unittest.TestCase):
         decoded = decoder_mod.decode_system(frame)
         self.assertEqual(decoded["type"], "node_info")
         self.assertEqual(decoded["node_id"], 0x03)
+        self.assertEqual(decoded["hw_type_name"], "STM32H5")
         self.assertEqual(decoded["fw_version"], "1.2.0")
         self.assertEqual(decoded["uptime_s"], 12345)
         self.assertIn("SYSTEM", decoded["supported_services"])
         self.assertIn("LIGHTING", decoded["supported_services"])
 
     def test_traction_speed_symmetry(self):
-        # Encoder: SET_SPEED 8.5 m/s with 1.2 m/s² accel
-        params = {"target_speed": 8.5, "target_accel": 1.2}
-        payload = encoder_mod.pack_payload(ServiceId.TRACTION, TractionCommand.SET_SPEED, params)
+        # Encoder: SET_TARGET_SPEED 8.5 m/s with omitted accel -> fixed 4B deos_traction_target_payload
+        payload_no_acc = encoder_mod.pack_payload(ServiceId.TRACTION, TractionCommand.SET_TARGET_SPEED, {"target_speed": 8.5})
+        self.assertEqual(len(payload_no_acc), 4)
+        spd0, acc0 = struct.unpack("<Hh", payload_no_acc)
+        self.assertEqual(spd0, 850)
+        self.assertEqual(acc0, 0)
+
+        # Encoder: SET_TARGET_SPEED 8.5 m/s with negative accel -2.5 m/s² (regen)
+        params = {"target_speed": 8.5, "target_accel": -2.5}
+        payload = encoder_mod.pack_payload(ServiceId.TRACTION, TractionCommand.SET_TARGET_SPEED, params)
         self.assertEqual(len(payload), 4)
-        spd_raw, acc_raw = struct.unpack("<HH", payload)
+        spd_raw, acc_raw = struct.unpack("<Hh", payload)
         self.assertEqual(spd_raw, 850)
-        self.assertEqual(acc_raw, 120)
+        self.assertEqual(acc_raw, -250)
 
         # Decoder: STATUS (10 bytes: speed, current, inverter_temp, motor_temp, gear, slip)
         status_payload = struct.pack("<HHhhBB", 850, 150, 420, 550, 1, 0)
@@ -276,12 +286,17 @@ class TestEncoderDecoderSymmetry(unittest.TestCase):
         self.assertEqual(ev_end[0]["faults"][0]["fault_id"], 0x0100)
 
     def test_steering_and_brake_symmetry(self):
-        # Steering command
+        # Steering command with target_angular_velocity
         str_payload = encoder_mod.pack_payload(ServiceId.STEERING, SteeringCommand.SET_TARGET_ANGLE, {"target_angle": -15.5, "target_angular_velocity": 45.0})
         self.assertEqual(len(str_payload), 4)
         ang_raw, vel_raw = struct.unpack("<hH", str_payload)
         self.assertEqual(ang_raw, -1550)
         self.assertEqual(vel_raw, 4500)
+
+        # Steering command with omitted velocity -> fixed 4B deos_steering_target_payload
+        str_no_vel = encoder_mod.pack_payload(ServiceId.STEERING, SteeringCommand.SET_TARGET_ANGLE, {"target_angle": 10.0})
+        self.assertEqual(len(str_no_vel), 4)
+        self.assertEqual(struct.unpack("<hH", str_no_vel), (1000, 0))
 
         # Steering status (9 bytes: <hHhhB)
         str_status = struct.pack("<hHhhB", -1550, 85, 380, 120, 1)
@@ -302,10 +317,19 @@ class TestEncoderDecoderSymmetry(unittest.TestCase):
         self.assertEqual(d_str["chassis_yaw_rate_deg_s"], 1.2)
         self.assertTrue(d_str["is_tracking"])
 
-        # Brake command: demand 75%
-        brk_payload = encoder_mod.pack_payload(ServiceId.BRAKE, BrakeCommand.SET_DEMAND, {"target_brake_demand": 75.0})
-        self.assertEqual(len(brk_payload), 2)
-        self.assertEqual(struct.unpack("<H", brk_payload)[0], 7500)
+        # Brake command: 4B deos_brake_target_payload (demand 75%, default decel 0)
+        brk_payload = encoder_mod.pack_payload(ServiceId.BRAKE, BrakeCommand.SET_TARGET, {"target_brake_demand": 75.0})
+        self.assertEqual(len(brk_payload), 4)
+        self.assertEqual(struct.unpack("<Hh", brk_payload), (7500, 0))
+
+        # Brake command with negative deceleration (-3.2 m/s²)
+        brk_decel = encoder_mod.pack_payload(
+            ServiceId.BRAKE,
+            BrakeCommand.SET_TARGET,
+            {"target_brake_demand": 60.0, "target_deceleration": -3.2},
+        )
+        self.assertEqual(len(brk_decel), 4)
+        self.assertEqual(struct.unpack("<Hh", brk_decel), (6000, -320))
 
         # Brake status (10 bytes: <HHHhBB)
         brk_status = struct.pack("<HHHhBB", 1250, 1800, 120, -250, 1, 1)
@@ -371,6 +395,30 @@ class TestEncoderDecoderSymmetry(unittest.TestCase):
         self.assertEqual(d_cfg["param_id"], 0x0001)
         self.assertEqual(d_cfg["name"], "PID_KP")
         self.assertEqual(d_cfg["value"], 2.5)
+
+    def test_sensors_imu_telemetry_decoding(self):
+        imu_payload = SensorImuPayload(
+            accel_x=-125, accel_y=45, accel_z=981,
+            gyro_x=-250, gyro_y=15, gyro_z=1234,
+            mag_x=-320, mag_y=410, mag_z=180,
+        ).to_bytes()
+        frame = UniversalDeosFrame(
+            destination=NodeId.GROUND_CONTROL,
+            source=NodeId.IMU,
+            priority=0x03,
+            message_class=0x02,
+            service=ServiceId.SENSORS,
+            command=SensorsCommand.IMU_DATA,
+            sequence=55,
+            payload=imu_payload,
+        )
+        decoded = decoder_mod.decode_sensors(frame)
+        self.assertEqual(decoded["type"], "imu")
+        self.assertEqual(decoded["source"], int(NodeId.IMU))
+        self.assertEqual(decoded["source_name"], "IMU")
+        self.assertEqual(decoded["accel_mps2"], {"x": -1.25, "y": 0.45, "z": 9.81})
+        self.assertEqual(decoded["gyro_deg_s"], {"x": -2.5, "y": 0.15, "z": 12.34})
+        self.assertEqual(decoded["mag_ut"], {"x": -320.0, "y": 410.0, "z": 180.0})
 
 
 if __name__ == "__main__":

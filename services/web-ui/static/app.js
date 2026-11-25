@@ -152,7 +152,7 @@ function handleIncomingEvent(topic, data) {
             resBox.className = "mt-3 p-2 rounded bg-black border border-info text-start small text-info";
             resBox.innerHTML = `
                 <div><strong>Node Info (0x${data.node_id.toString(16).toUpperCase()})</strong></div>
-                <div>FW: ${data.fw_version} | Git: <code>${data.git_hash}</code> | Uptime: ${data.uptime_s}s</div>
+                <div>HW: ${data.hw_type_name || data.hw_type} | FW: ${data.fw_version} | Git: <code>${data.git_hash}</code> | Uptime: ${data.uptime_s}s</div>
                 <div>Services: ${data.supported_services ? data.supported_services.join(", ") : "None"}</div>
             `;
         } else if (data.type === "subscribe_response") {
@@ -757,9 +757,15 @@ function logPacket(topic, data) {
 
     if (topic === "command/status" && data.wire_hex) {
         const info = data.frame_info;
-        const infoStr = info 
-            ? `| Dest=${info.dest} Src=${info.src} Prio=${info.priority} Class=${info.message_class} Srv=${info.service} Cmd=${info.command} Seq=${info.sequence}${info.payload ? ' Payload=[' + info.payload + ']' : ''}` 
-            : "";
+        let infoStr = "";
+        if (info) {
+            const destLabel = info.dest_name ? `${info.dest_name}(${info.dest})` : info.dest;
+            const srcLabel = info.src_name ? `${info.src_name}(${info.src})` : info.src;
+            const clsLabel = info.class_name ? `${info.class_name}(${info.message_class})` : info.message_class;
+            const srvLabel = info.service_name ? `${info.service_name}(${info.service})` : info.service;
+            const cmdLabel = info.command_name ? `${info.command_name}(${info.command})` : info.command;
+            infoStr = `| Dest=${destLabel} Src=${srcLabel} Prio=${info.priority} Class=${clsLabel} Srv=${srvLabel} Cmd=${cmdLabel} Seq=${info.sequence}${info.payload ? ' Payload=[' + info.payload + ']' : ''}`;
+        }
         entry.innerHTML = `<span class="log-time">[${time}]</span> <span class="badge bg-primary text-white me-1">TX LORA</span> <span class="log-topic">${topic}</span>: <span class="text-warning fw-bold font-monospace">${data.wire_hex}</span> <span class="text-info small ms-1">${infoStr}</span>`;
     } else {
         entry.innerHTML = `<span class="log-time">[${time}]</span> <span class="log-topic">${topic}</span>: <span class="log-data">${JSON.stringify(data)}</span>`;
