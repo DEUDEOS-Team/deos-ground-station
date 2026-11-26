@@ -15,12 +15,17 @@ const KNOWN_NODES = [
     { id: 0x04, name: "ROS 2 Bridge", type: "Virtual Bridge", state: "UNKNOWN", lastSeen: null },
 ];
 
+const NODE_OFFLINE_TIMEOUT_MS = 30000;
+const nodeLastSeenMs = {};
+
 // Initialize on page load
 document.addEventListener("DOMContentLoaded", () => {
     initNodesTable();
     initWebSocket();
     loadRegistry();
     fetchHardwareStatus();
+    fetchNodesStatus();
+    setInterval(checkStaleNodes, 5000);
 });
 
 async function fetchHardwareStatus() {
@@ -34,6 +39,20 @@ async function fetchHardwareStatus() {
         }
     } catch (e) {
         console.warn("Failed fetching initial hardware status:", e);
+    }
+}
+
+async function fetchNodesStatus() {
+    try {
+        const res = await fetch("/api/nodes/status");
+        if (res.ok) {
+            const data = await res.json();
+            if (data && Array.isArray(data.nodes)) {
+                applyNodesSnapshot(data.nodes);
+            }
+        }
+    } catch (e) {
+        console.warn("Failed fetching initial node presence:", e);
     }
 }
 
@@ -116,6 +135,13 @@ function handleIncomingEvent(topic, data) {
         return;
     }
 
+    if (topic === "system/nodes_snapshot") {
+        if (Array.isArray(data)) {
+            applyNodesSnapshot(data);
+        }
+        return;
+    }
+
     logPacket(topic, data);
 
     // Auto-detect: If any vehicle telemetry packet arrives over LoRa, transceiver is undeniably connected!
@@ -124,6 +150,9 @@ function handleIncomingEvent(topic, data) {
         if (badge && badge.innerText.includes("Disconnected")) {
             updateHardwareStatusBadge({ connected: true, port: "/dev/ttyUSB0", mode: "HARDWARE" });
             lastLoggedHwStatus = "true_HARDWARE";
+        }
+        if (data && typeof data.source === "number") {
+            markNodeSeen(data.source);
         }
     }
 
@@ -142,11 +171,14 @@ function handleIncomingEvent(topic, data) {
     else if (topic === "telemetry/system") {
         if (data.type === "heartbeat") {
             updateNodeHeartbeat(data.source, data.state_name || data.state);
+        } else if (data.type === "state_response") {
+            updateNodeHeartbeat(data.source, data.state_name || data.state);
         } else if (data.type === "pong") {
             const rtt = Date.now() - pingStartTime;
             const resBox = document.getElementById("pingResultBox");
+            const srcHex = data.source.toString(16).padStart(2, "0").toUpperCase();
             resBox.className = "mt-3 p-2 rounded bg-black border border-success text-center small text-success";
-            resBox.innerHTML = `<i class="fa-solid fa-check me-1"></i> PONG from 0x${data.source.toString(16).toUpperCase()} | Ping ID: ${data.ping_id} | RTT: ${rtt} ms`;
+            resBox.innerHTML = `<i class="fa-solid fa-check me-1"></i> PONG from 0x${srcHex} | Ping ID: ${data.ping_id} | RTT: ${rtt} ms`;
         } else if (data.type === "node_info") {
             const resBox = document.getElementById("pingResultBox");
             resBox.className = "mt-3 p-2 rounded bg-black border border-info text-start small text-info";
@@ -281,16 +313,55 @@ function updateHardwareStatusBadge(data) {
     }
 }
 
-function updateNodeHeartbeat(nodeId, stateName) {
+function getStateBadgeClass(stateName) {
+    const upper = String(stateName || "").toUpperCase();
+    if (upper === "ACTIVE" || upper === "READY") return "bg-success";
+    if (upper === "STANDBY" || upper === "CALIBRATING") return "bg-warning text-dark";
+    if (upper === "SAFE") return "bg-info text-dark";
+    if (upper === "FAULT") return "bg-danger";
+    return "bg-secondary";
+}
+
+function markNodeSeen(nodeId, stateName = null, seenTimestampMs = Date.now()) {
+    nodeLastSeenMs[nodeId] = seenTimestampMs;
+    const isFresh = Date.now() - seenTimestampMs <= NODE_OFFLINE_TIMEOUT_MS;
+
     const pill = document.getElementById(`pill-node-${nodeId}`);
     const text = document.getElementById(`statustext-node-${nodeId}`);
     const state = document.getElementById(`state-node-${nodeId}`);
     const seen = document.getElementById(`seen-node-${nodeId}`);
 
-    if (pill) pill.className = "status-pill online";
-    if (text) text.innerText = "ONLINE";
-    if (state) state.innerHTML = `<span class="badge bg-success">${stateName}</span>`;
-    if (seen) seen.innerText = new Date().toLocaleTimeString();
+    if (pill) pill.className = isFresh ? "status-pill online" : "status-pill offline";
+    if (text) text.innerText = isFresh ? "ONLINE" : "OFFLINE";
+    if (state && stateName !== null && stateName !== undefined) {
+        state.innerHTML = `<span class="badge ${getStateBadgeClass(stateName)}">${stateName}</span>`;
+    }
+    if (seen) seen.innerText = new Date(seenTimestampMs).toLocaleTimeString();
+}
+
+function updateNodeHeartbeat(nodeId, stateName) {
+    markNodeSeen(nodeId, stateName);
+}
+
+function applyNodesSnapshot(nodes) {
+    const now = Date.now();
+    nodes.forEach(n => {
+        if (typeof n.node_id === "number") {
+            markNodeSeen(n.node_id, n.state_name ?? null, now - (n.age_ms || 0));
+        }
+    });
+}
+
+function checkStaleNodes() {
+    const now = Date.now();
+    Object.entries(nodeLastSeenMs).forEach(([nodeId, lastMs]) => {
+        if (now - lastMs > NODE_OFFLINE_TIMEOUT_MS) {
+            const pill = document.getElementById(`pill-node-${nodeId}`);
+            const text = document.getElementById(`statustext-node-${nodeId}`);
+            if (pill) pill.className = "status-pill offline";
+            if (text) text.innerText = "OFFLINE";
+        }
+    });
 }
 
 function updateCellVoltageRow(idx, volt) {

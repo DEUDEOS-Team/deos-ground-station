@@ -8,6 +8,7 @@ import asyncio
 import json
 import logging
 import os
+import time
 from contextlib import asynccontextmanager
 from typing import Any, Dict, List, Optional, Set
 
@@ -48,6 +49,20 @@ connected_websockets: Set[WebSocket] = set()
 event_loop: asyncio.AbstractEventLoop = None
 mqtt_client: mqtt.Client = None
 last_hardware_status: Optional[Dict[str, Any]] = None
+node_presence: Dict[int, Dict[str, Any]] = {}
+
+
+def _build_nodes_snapshot() -> List[Dict[str, Any]]:
+    """Return cached node presence entries with server-relative age_ms."""
+    now_ms = int(time.time() * 1000)
+    snapshot: List[Dict[str, Any]] = []
+    for entry in node_presence.values():
+        snapshot.append({
+            "node_id": entry["node_id"],
+            "state_name": entry.get("state_name"),
+            "age_ms": max(0, now_ms - entry["last_seen_ms"]),
+        })
+    return snapshot
 
 
 def on_mqtt_connect(client, userdata, flags, rc, properties=None):
@@ -70,6 +85,18 @@ def on_mqtt_message(client, userdata, msg):
 
     if topic == "telemetry/hardware":
         last_hardware_status = payload
+    elif (
+        topic.startswith("telemetry/")
+        and isinstance(payload, dict)
+        and isinstance(payload.get("source"), int)
+        and not isinstance(payload.get("source"), bool)
+    ):
+        src = payload["source"]
+        entry = node_presence.setdefault(src, {"node_id": src, "state_name": None, "last_seen_ms": 0})
+        entry["last_seen_ms"] = int(time.time() * 1000)
+        if topic == "telemetry/system" and payload.get("type") in ("heartbeat", "state_response"):
+            if payload.get("state_name"):
+                entry["state_name"] = payload["state_name"]
 
     event = {
         "topic": topic,
@@ -150,6 +177,15 @@ async def websocket_endpoint(websocket: WebSocket):
         except Exception:
             pass
 
+    if node_presence:
+        try:
+            await websocket.send_text(json.dumps({
+                "topic": "system/nodes_snapshot",
+                "data": _build_nodes_snapshot(),
+            }))
+        except Exception:
+            pass
+
     try:
         while True:
             # Keepalive / listen for possible incoming ping
@@ -163,6 +199,12 @@ async def websocket_endpoint(websocket: WebSocket):
 async def get_hardware_status():
     """Return latest cached hardware status."""
     return last_hardware_status or {"connected": False, "mode": "UNKNOWN"}
+
+
+@app.get("/api/nodes/status")
+async def get_nodes_status():
+    """Return latest cached node presence and state snapshot."""
+    return {"nodes": _build_nodes_snapshot()}
 
 
 @app.post("/api/command")
