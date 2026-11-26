@@ -128,7 +128,7 @@ function handleIncomingEvent(topic, data) {
     }
 
     // 0.1 COMMAND STATUS (ARQ & Hardware Errors)
-    else if (topic === "command/status") {
+    if (topic === "command/status") {
         if (data.status === "ERROR_NO_HARDWARE") {
             const resBox = document.getElementById("pingResultBox");
             if (resBox) {
