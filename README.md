@@ -1,15 +1,15 @@
 # DEOS Yer Kontrol İstasyonu (Ground Control Station)
 
-![DEOS Protocol](https://img.shields.io/badge/DEOS_Protocol-v1.1_(0x11)-blue.svg)
+![DEOS Protocol](https://img.shields.io/badge/DEOS_Protocol-v1.2_(0x12)-blue.svg)
 ![Core Engine](https://img.shields.io/badge/Core_Engine-deos--protocol_(ANSI_C99)-informational.svg)
 ![Architecture](https://img.shields.io/badge/Architecture-Microservices-success.svg)
 ![Transport](https://img.shields.io/badge/Transport-LoRa_UART_(CRC16--CCITT)-orange.svg)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED.svg)
-![Tests](https://img.shields.io/badge/Unit_Tests-42_Passed-brightgreen.svg)
+![Tests](https://img.shields.io/badge/Unit_Tests-43_Passed-brightgreen.svg)
 
 **Dokuz Eylül Otonom Sistemler (DEOS)** elektrikli otonom yarış aracının uzaktan telemetri izleme, gerçek zamanlı kontrol, dinamik abonelik yönetimi, arıza teşhisi (Diagnostics) ve parametre konfigürasyonu için geliştirilmiş mikroservis tabanlı **Yer Kontrol İstasyonu (`DEOS_NODE_GROUND_CONTROL = 0x02`)** yazılımıdır.
 
-Bu proje, araç içi yazılımla aynı kaynak olan [`deos-protocol`](file:///home/alper/deos_ground_station/deos-protocol) (saf ANSI C99) submodule'ündeki `deos_icd.h` ve `deos_types.h` şartnamelerini **Tek Doğruluk Kaynağı (Single Source of Truth)** kabul ederek `ctypes` C köprüsü üzerinden **DEOS v1.1 (`0x11`)** protokolü ile bit-bit uyumlu çalışacak şekilde tasarlanmıştır.
+Bu proje, araç içi yazılımla aynı kaynak olan [`deos-protocol`](file:///home/alper/deos_ground_station/deos-protocol) (saf ANSI C99) submodule'ündeki `deos_icd.h` ve `deos_types.h` şartnamelerini **Tek Doğruluk Kaynağı (Single Source of Truth)** kabul ederek `ctypes` C köprüsü üzerinden **DEOS v1.2 (`0x12`)** protokolü ile bit-bit uyumlu çalışacak şekilde tasarlanmıştır.
 
 ---
 
@@ -17,12 +17,12 @@ Bu proje, araç içi yazılımla aynı kaynak olan [`deos-protocol`](file:///hom
 
 * **C99 Motoruyla Bit-Bit Protokol Uyumu (`c_bridge.py` & `payloads.py`):** `UNIVERSAL_9B` çerçeve kodlama/çözme işlemleri, isim çözücüler ve Little-Endian codec'ler doğrudan derlenmiş `libdeos_protocol.so` (`deos_frame.c`, `deos_codec.c`, `deos_registry.c`) C kütüphanesi üzerinden yürütülür. `deos-protocol` submodule'üne dokunulmadan tüm kontrol ve telemetri veri yükleri `deos_types.h` içindeki packed C struct'ları ile birebir (`_pack_ = 1`) paketlenir ve açılır.
 * **Medya Bağımsız Evrensel Çerçeve & 4-Bayt Kontrol Komutları:** Yer İstasyonu 29-bit CAN ID hesaplamaz; `DEOS_NODE_MAIN_STM32 (0x03)` Router düğümüne saf `deos_message_t` gönderir. `TRACTION` (`SET_TARGET_SPEED`), `STEERING` (`SET_TARGET_ANGLE`) ve `BRAKE` (`SET_TARGET`) komutları araçtaki C struct boyutlarıyla uyumlu sabit **4 bayt** (`uint16` / `int16`) formatında paketlenir.
-* **Güvenilir LoRa L2 Taşıma Katmanı (`Linker`) & Sembolik İzleme:** `0xAA 0x55` senkronizasyonu, `CRC16-CCITT (0x1021)` doğrulaması, çift yönlü **ACK / ARQ** mekanizmasının yanı sıra TX/RX paketlerinde `deos_node_name`, `deos_class_name`, `deos_service_name` ve `deos_command_name` C fonksiyonlarıyla resmi sembolik isim çözümü yapar.
+* **Güvenilir LoRa L2 Taşıma Katmanı (`Linker`) & Sembolik İzleme:** `0xAA 0x55` senkronizasyonu, `CRC16-CCITT (0x1021)` doğrulaması, çift yönlü **ACK / ARQ** mekanizmasının yanı sıra TX/RX paketlerinde `deos_node_name`, `deos_class_name`, `deos_service_name`, `deos_command_name`, `deos_fault_name` ve `deos_fault_severity_name` C fonksiyonlarıyla resmi sembolik isim çözümü yapar.
 * **Dinamik USB Hotplug & Auto-Reconnect:** `/dev:/dev` bind mount ve ayrıcalıklı izinler sayesinde LoRa USB dönüştürücü çalışma anında takılıp çıkarılabilir; konteyneri yeniden başlatmaya gerek kalmadan otomatik bağlanır.
 * **Canlı Donanım Güvenlik Koruması (`Hardware Guard`):** USB modülü bağlı değilken gönderilen komutlar reddedilerek operatöre `ERROR_NO_HARDWARE` uyarısı verilir; arayüz sağ üstünde canlı bağlantı rozeti (`LoRa USB: Connected / Disconnected / Mock Mode`) yer alır ve tekrarlayan bağlantı logları tekilleştirilir.
 * **Genişletilmiş Servis & Telemetri Desteği (`SENSORS` IMU & `CALIBRATION`):** `decoder` seviyesinde `SENSORS (0x07)` 9-eksen IMU telemetrisi (`telemetry/sensors`), `CALIBRATION (0x05)` yanıtları (`telemetry/calibration`) ve `GET_NODE_INFO` yanıtlarında `HardwareType` (`hw_type_name`: `STM32H5`, `ESP32` vb.) çözümlemesi desteklenir.
 * **Dinamik Telemetri Abonelik Motoru & Çoklu Paket Akışı:** Periyodik (`10..65534 ms`), kira süreli (`Lease TTL`) veya **On-Change (`0xFFFF`)** abonelikleri destekler; `BMS` ve `DIAGNOSTIC` (`GET_FAULTS`) parçalı listelerini otomatik birleştirir.
-* **Standart Genişletilmiş Arıza Kütüphanesi (`Fault Registry`):** `CommonFaultId` (`0x0000` - `0x00A2`) standardındaki Sistem, Telemetri, Router, Protokol, CAN-FD (`0x0045 CAN_TX_SEND_FAILED`), LoRa, Ethernet ve Dağıtıcı (Dispatcher) arızalarını Türkçe açıklamalarıyla görüntüler.
+* **Global Fault SSOT (`deos_fault_id_t`) & Arıza Kütüphanesi:** `deos_icd.h` içindeki 16-bit Global Fault SSOT (`0x0000`–`0x00A2` Sistem/Router/CAN/LoRa/Ethernet/Dispatcher, `0x0400+` BMS, `0x0500+` BMS Gateway) ile tam uyumludur; `deos_fault_name`/`deos_fault_severity_name` C çözümleyicilerini ve Türkçe açıklamaları kullanır (eski `0x0100+` node kodları için geriye dönük fallback korunur).
 
 ---
 
@@ -102,18 +102,18 @@ deos_ground_station/
 │       ├── __init__.py
 │       ├── c_bridge.py       # libdeos_protocol.so için binary-safe ctypes köprüsü & yerel build önbelleği
 │       ├── payloads.py       # deos_types.h packed struct'ları (_pack_=1) ve parametre paketleyiciler
-│       ├── enums.py          # deos_icd.h & deos_types.h uyumlu Node, Service, Command, HardwareType, CommonFaultId
+│       ├── enums.py          # deos_icd.h & deos_types.h uyumlu Node, Service, Command, HardwareType, GlobalFaultId
 │       ├── crc.py            # Standart CRC16-CCITT (Polinom: 0x1021, Seed: 0xFFFF, Little-Endian)
 │       ├── framing.py        # C motoruna bağlı UniversalDeosFrame (9B) + LoRa L2 Zarfı
 │       ├── models.py         # Pydantic v2 komut şemaları, servis-bazlı MessageClass çıkarımı ve ICD kuralları
 │       ├── scaling.py        # PhysicalValue = RawValue * Scale + Offset dönüşümleri (IMU dahil)
-│       └── registry.py       # Parametre listeleri ve Türkçe DTC / Fault sözlükleri (0x0000 - 0x00A2)
+│       └── registry.py       # Parametre listeleri ve Global Fault SSOT / Türkçe DTC sözlükleri (0x0000 - 0x0505+)
 ├── services/
 │   ├── linker/               # Multi-Stage Dockerfile + UART, LoRa L2, ARQ FSM, C sembolik trace
 │   ├── encoder/              # Multi-Stage Dockerfile + JSON Komut -> C Struct Payload -> C Frame Encode
 │   ├── decoder/              # Multi-Stage Dockerfile + C Frame Decode -> C Struct -> JSON Telemetri (+IMU)
 │   └── web-ui/               # Multi-Stage Dockerfile + FastAPI Dashboard & WebSocket (Port 8000)
-└── tests/                    # 42 Birim & C99 Parite Testi (ABI, framing, symmetry, ARQ, header drift)
+└── tests/                    # 43 Birim & C99 Parite Testi (ABI, framing, symmetry, ARQ, header drift)
 ```
 
 ---
@@ -209,7 +209,7 @@ DEOS_PROTOCOL_LIB_PATH=/usr/local/lib/libdeos_protocol.so
 
 # Encoder & Decoder Servisleri
 DEOS_SOURCE_NODE=0x02
-DEOS_PROTOCOL_VERSION=0x11
+DEOS_PROTOCOL_VERSION=0x12
 DEOS_FRAME_LAYOUT=UNIVERSAL_9B
 DEOS_PROTOCOL_LIB_PATH=/usr/local/lib/libdeos_protocol.so
 ```
@@ -231,7 +231,7 @@ docker compose logs -f
 * **MQTT WebSocket:** `ws://localhost:9001`
 
 ### 5. Birim ve C99 Protokol Parite Testlerini Çalıştırma
-Sistem; CRC16, framing, `ctypes` ABI hizalaması (`sizeof`/`offsetof`), packed C struct & `deos_icd.h` enum/parametre paritesi, çift yönlü C99 $\leftrightarrow$ Python tel-seviyesi paket uyumu, simetri ve Linker ARQ mekanizmalarını doğrulayan **42 adet otomatik test** içerir:
+Sistem; CRC16, framing, `ctypes` ABI hizalaması (`sizeof`/`offsetof`), packed C struct & `deos_icd.h` enum/global fault/parametre paritesi, çift yönlü C99 $\leftrightarrow$ Python tel-seviyesi paket uyumu, simetri ve Linker ARQ mekanizmalarını doğrulayan **43 adet otomatik test** içerir:
 
 ```bash
 .venv/bin/python -m unittest discover -v tests

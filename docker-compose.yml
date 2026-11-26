@@ -56,7 +56,7 @@ services:
       - MQTT_BROKER=mosquitto
       - MQTT_PORT=1883
       - DEOS_SOURCE_NODE=0x02
-      - DEOS_PROTOCOL_VERSION=0x11
+      - DEOS_PROTOCOL_VERSION=0x12
       - DEOS_FRAME_LAYOUT=UNIVERSAL_9B
       - DEOS_PROTOCOL_LIB_PATH=/usr/local/lib/libdeos_protocol.so
     volumes:

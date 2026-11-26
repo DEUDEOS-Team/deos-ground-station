@@ -57,6 +57,7 @@ from deos_core import (
     TractionCommand,
     TractionStatusPayload,
     UniversalDeosFrame,
+    c_fault_severity_name,
     get_fault_info,
     get_parameter_info,
     to_physical,
@@ -360,7 +361,7 @@ def decode_diagnostic(frame: UniversalDeosFrame) -> List[Dict[str, Any]]:
         flt = DiagnosticFaultPayload.from_bytes(payload)
         if flt.fault_id != END_OF_FAULT_LIST:
             info = get_fault_info(src, flt.fault_id)
-            sev_name = FaultSeverity(flt.severity).name if flt.severity in FaultSeverity._value2member_map_ else "UNKNOWN"
+            sev_name = c_fault_severity_name(flt.severity)
             state_name = FaultState(flt.state).name if flt.state in FaultState._value2member_map_ else "UNKNOWN"
             record = {
                 "fault_id": flt.fault_id,

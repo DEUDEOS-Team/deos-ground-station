@@ -43,7 +43,7 @@ class TestLinkerArq(unittest.TestCase):
         self.linker.mqtt_client.publish = lambda topic, payload: self.published_mqtt.append((topic, payload))
 
     def test_tx_reliable_creates_arq_entry(self):
-        sample_frame = b"\x03\x02\x05\x11\x07\x00\x08\x01\x04\x12\x34\x56\x78"
+        sample_frame = b"\x03\x02\x05\x12\x07\x00\x08\x01\x04\x12\x34\x56\x78"
 
         class DummyMsg:
             topic = "lora/tx/reliable"
@@ -78,7 +78,7 @@ class TestLinkerArq(unittest.TestCase):
 
     def test_vehicle_flag_01_triggers_automatic_ack(self):
         # A critical packet from the vehicle (Flag=0x01)
-        vehicle_pure_frame = b"\x02\x03\x01\x11\x00\x00\x05\x01\x01\x01"
+        vehicle_pure_frame = b"\x02\x03\x01\x12\x00\x00\x05\x01\x01\x01"
         vehicle_wire_packet = wrap_lora_packet(LoraFlag.ACK_REQ, vehicle_pure_frame)
         vehicle_crc = int.from_bytes(vehicle_wire_packet[-2:], "little")
 
@@ -110,7 +110,7 @@ class TestLinkerArq(unittest.TestCase):
 
         class DummyMsg:
             topic = "lora/tx/reliable"
-            payload = b"\x03\x02\x05\x11\x00\x00\x08\x01\x04\x12\x34\x56\x78"
+            payload = b"\x03\x02\x05\x12\x00\x00\x08\x01\x04\x12\x34\x56\x78"
 
         self.linker.on_mqtt_message(None, None, DummyMsg())
 

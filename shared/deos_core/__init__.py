@@ -1,4 +1,4 @@
-"""DEOS Core Protocol Package (v1.1 Master).
+"""DEOS Core Protocol Package (v1.2 Master).
 
 Media-independent transport framing, CRC16-CCITT, registries, enums, models, and scaling.
 """
@@ -27,6 +27,7 @@ from .enums import (
     FaultSeverity,
     FaultState,
     CommonFaultId,
+    GlobalFaultId,
     Gear,
     ParkBrakeState,
     HardwareType,
@@ -53,6 +54,7 @@ from .registry import (
     ParameterInfo,
     PARAMETERS,
     COMMON_FAULTS,
+    GLOBAL_FAULTS,
     NODE_FAULTS,
 )
 from .c_bridge import (
@@ -62,6 +64,8 @@ from .c_bridge import (
     c_command_name,
     c_decode_frame,
     c_encode_frame,
+    c_fault_name,
+    c_fault_severity_name,
     c_node_name,
     c_service_name,
     c_transport_name,
@@ -135,6 +139,7 @@ __all__ = [
     "FaultSeverity",
     "FaultState",
     "CommonFaultId",
+    "GlobalFaultId",
     "Gear",
     "ParkBrakeState",
     "HardwareType",
@@ -159,6 +164,7 @@ __all__ = [
     "ParameterInfo",
     "PARAMETERS",
     "COMMON_FAULTS",
+    "GLOBAL_FAULTS",
     "NODE_FAULTS",
     "get_lib",
     "CDecodedFrame",
@@ -170,6 +176,8 @@ __all__ = [
     "c_service_name",
     "c_class_name",
     "c_command_name",
+    "c_fault_name",
+    "c_fault_severity_name",
     "put_u16_le",
     "get_u16_le",
     "put_i16_le",

@@ -1,4 +1,4 @@
-"""DEOS Protocol Enumerations and Constants (v1.1 Master).
+"""DEOS Protocol Enumerations and Constants (v1.2 Master).
 
 Derived from:
 - DOC-ICD-CORE-001 (Core Architecture)
@@ -16,7 +16,7 @@ Derived from:
 from enum import IntEnum
 
 # Protocol Standard Constants
-DEOS_VERSION = 0x11  # Protocol wire version v1.1
+DEOS_VERSION = 0x12  # Protocol wire version v1.2
 LORA_MAGIC = b"\xaa\x55"  # LoRa L2 synchronization magic bytes
 END_OF_FAULT_LIST = 0x0000  # Fault ID marker for end of list
 END_OF_LIST = 0x00  # Index marker for end of list in BMS
@@ -323,6 +323,28 @@ class CommonFaultId(IntEnum):
     DISPATCH_TABLE_FULL = 0x00A0
     DISPATCH_DUPLICATE_HANDLER = 0x00A1
     DISPATCH_HANDLER_NOT_FOUND = 0x00A2
+
+    # BMS Global Hataları (0x0400 - 0x04FF)
+    BMS_PACK_OVERVOLTAGE = 0x0400
+    BMS_PACK_UNDERVOLTAGE = 0x0401
+    BMS_CHARGE_OVERCURRENT = 0x0402
+    BMS_DISCHARGE_OVERCURRENT = 0x0403
+    BMS_OVERTEMPERATURE = 0x0404
+    BMS_UNDERTEMPERATURE = 0x0405
+    BMS_CELL_IMBALANCE = 0x0406
+    BMS_INTERNAL_ERROR = 0x0407
+    BMS_INVALID_MEASUREMENT = 0x0408
+
+    # BMS Gateway Global Hataları (0x0500 - 0x05FF)
+    GW_MAIN_COMM_LOST = 0x0500
+    GW_AUX_COMM_LOST = 0x0501
+    GW_CAN_BUS_OFF = 0x0502
+    GW_FD_BUS_OFF = 0x0503
+    GW_INVALID_FRAME = 0x0504
+    GW_PROTOCOL_ERROR = 0x0505
+
+
+GlobalFaultId = CommonFaultId
 
 
 class Gear(IntEnum):

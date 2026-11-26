@@ -1,4 +1,4 @@
-"""DEOS Parameter and Fault Registries (v1.1 Master).
+"""DEOS Parameter and Fault Registries (v1.2 Master).
 
 Derived from:
 - DOC-ICD-DATA-002 v1.1 (Parameter IDs and Data Types)
@@ -61,7 +61,7 @@ COMMON_FAULTS: Dict[int, FaultInfo] = {
     CommonFaultId.ROUTER_QUEUE_FULL: FaultInfo(0x0024, "ROUTER_QUEUE_FULL", "Router Mesaj Kuyruğu Taştı (Queue Overflow)", FaultSeverity.ERROR),
 
     # Protokol & Çerçeve Hataları (0x0030 - 0x003F)
-    CommonFaultId.PROTOCOL_VERSION_MISMATCH: FaultInfo(0x0030, "PROTOCOL_VERSION_MISMATCH", "Protokol Versiyonu Uyumsuz (v1.1 Bekleniyordu)", FaultSeverity.WARNING),
+    CommonFaultId.PROTOCOL_VERSION_MISMATCH: FaultInfo(0x0030, "PROTOCOL_VERSION_MISMATCH", "Protokol Versiyonu Uyumsuz (v1.2 Bekleniyordu)", FaultSeverity.WARNING),
     CommonFaultId.FRAME_HEADER_TOO_SHORT: FaultInfo(0x0031, "FRAME_HEADER_TOO_SHORT", "Evrensel Çerçeve Başlık Boyutu Yetersiz (< 9 Byte)", FaultSeverity.WARNING),
     CommonFaultId.PAYLOAD_TOO_LARGE: FaultInfo(0x0032, "PAYLOAD_TOO_LARGE", "Payload DEOS_MAX_PAYLOAD_LEN Sınırını Aşıyor", FaultSeverity.WARNING),
     CommonFaultId.FRAME_CRC_MISMATCH: FaultInfo(0x0033, "FRAME_CRC_MISMATCH", "Çerçeve CRC16 Doğrulama Hatası", FaultSeverity.WARNING),
@@ -98,7 +98,28 @@ COMMON_FAULTS: Dict[int, FaultInfo] = {
     CommonFaultId.DISPATCH_TABLE_FULL: FaultInfo(0x00A0, "DISPATCH_TABLE_FULL", "Handler Tablosunda Yer Kalmadı", FaultSeverity.ERROR),
     CommonFaultId.DISPATCH_DUPLICATE_HANDLER: FaultInfo(0x00A1, "DISPATCH_DUPLICATE_HANDLER", "Aynı Komut İçin Mükerrer Handler Kaydı Yapıldı", FaultSeverity.WARNING),
     CommonFaultId.DISPATCH_HANDLER_NOT_FOUND: FaultInfo(0x00A2, "DISPATCH_HANDLER_NOT_FOUND", "Gelen Komut İçin Handler Tanımlı Değil (İşlenemedi)", FaultSeverity.ERROR),
+
+    # BMS Global Hataları (0x0400 - 0x04FF)
+    CommonFaultId.BMS_PACK_OVERVOLTAGE: FaultInfo(0x0400, "BMS_PACK_OVERVOLTAGE", "Batarya Paketi Toplam Gerilimi Üst Sınırı Aştı", FaultSeverity.CRITICAL),
+    CommonFaultId.BMS_PACK_UNDERVOLTAGE: FaultInfo(0x0401, "BMS_PACK_UNDERVOLTAGE", "Batarya Paketi Toplam Gerilimi Kesme Alt Sınırının Altında", FaultSeverity.CRITICAL),
+    CommonFaultId.BMS_CHARGE_OVERCURRENT: FaultInfo(0x0402, "BMS_CHARGE_OVERCURRENT", "Batarya Şarj Aşırı Akımı Algılandı", FaultSeverity.CRITICAL),
+    CommonFaultId.BMS_DISCHARGE_OVERCURRENT: FaultInfo(0x0403, "BMS_DISCHARGE_OVERCURRENT", "Batarya Deşarj Aşırı Akımı Algılandı", FaultSeverity.CRITICAL),
+    CommonFaultId.BMS_OVERTEMPERATURE: FaultInfo(0x0404, "BMS_OVERTEMPERATURE", "Batarya Modül Sıcaklığı Maksimum Güvenli Sınırı Aştı", FaultSeverity.CRITICAL),
+    CommonFaultId.BMS_UNDERTEMPERATURE: FaultInfo(0x0405, "BMS_UNDERTEMPERATURE", "Batarya Modül Sıcaklığı Minimum Sınırın Altında", FaultSeverity.WARNING),
+    CommonFaultId.BMS_CELL_IMBALANCE: FaultInfo(0x0406, "BMS_CELL_IMBALANCE", "Hücre Gerilim Farkı Güvenli Balans Marjını Aştı", FaultSeverity.WARNING),
+    CommonFaultId.BMS_INTERNAL_ERROR: FaultInfo(0x0407, "BMS_INTERNAL_ERROR", "BMS Dahili AFE / Donanım Hatası", FaultSeverity.CRITICAL),
+    CommonFaultId.BMS_INVALID_MEASUREMENT: FaultInfo(0x0408, "BMS_INVALID_MEASUREMENT", "BMS Gerilim/Akım Sensör Okuma Hatası", FaultSeverity.ERROR),
+
+    # BMS Gateway Global Hataları (0x0500 - 0x05FF)
+    CommonFaultId.GW_MAIN_COMM_LOST: FaultInfo(0x0500, "GW_MAIN_COMM_LOST", "Ana Batarya (BMS Main) Classic CAN İletişimi Kesildi", FaultSeverity.CRITICAL),
+    CommonFaultId.GW_AUX_COMM_LOST: FaultInfo(0x0501, "GW_AUX_COMM_LOST", "Yardımcı Batarya (BMS Aux) Classic CAN İletişimi Kesildi", FaultSeverity.ERROR),
+    CommonFaultId.GW_CAN_BUS_OFF: FaultInfo(0x0502, "GW_CAN_BUS_OFF", "BMS Gateway Classic CAN Veriyolu Bus-Off", FaultSeverity.CRITICAL),
+    CommonFaultId.GW_FD_BUS_OFF: FaultInfo(0x0503, "GW_FD_BUS_OFF", "BMS Gateway CAN-FD Veriyolu Bus-Off", FaultSeverity.CRITICAL),
+    CommonFaultId.GW_INVALID_FRAME: FaultInfo(0x0504, "GW_INVALID_FRAME", "Bozuk veya Geçersiz Daly BMS Çerçevesi", FaultSeverity.WARNING),
+    CommonFaultId.GW_PROTOCOL_ERROR: FaultInfo(0x0505, "GW_PROTOCOL_ERROR", "Daly BMS Protokol / Checksum Doğrulama Hatası", FaultSeverity.WARNING),
 }
+
+GLOBAL_FAULTS = COMMON_FAULTS
 
 # Node-Specific Fault Registries (0x0100+)
 NODE_FAULTS: Dict[Tuple[int, int], FaultInfo] = {
@@ -177,6 +198,20 @@ def get_fault_info(node_id: int, fault_id: int) -> FaultInfo:
     key = (node_id, fault_id)
     if key in NODE_FAULTS:
         return NODE_FAULTS[key]
+
+    try:
+        from .c_bridge import c_fault_name
+
+        c_name = c_fault_name(fault_id)
+        if c_name != "UNKNOWN_FAULT":
+            return FaultInfo(
+                code=fault_id,
+                name=c_name,
+                description=f"DEOS Global Arıza (0x{fault_id:04X}: {c_name})",
+                default_severity=FaultSeverity.ERROR,
+            )
+    except Exception:
+        pass
 
     # Smart subsystem range fallbacks for unlisted codes
     if 0x0040 <= fault_id <= 0x004F:

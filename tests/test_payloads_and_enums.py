@@ -364,7 +364,7 @@ int main(void) {
 
         # NodeInfo 20B & BmsStatus 16B
         ni = NodeInfoPayload(
-            result_code=0, node_id=3, hw_type=HardwareType.STM32H5, proto_version=0x11,
+            result_code=0, node_id=3, hw_type=HardwareType.STM32H5, proto_version=0x12,
             fw_version_major=1, fw_version_minor=2, fw_version_patch=3, reserved=0,
             git_hash=0xDEADBEEF, supported_services=0x0101, uptime_s=4321,
         )

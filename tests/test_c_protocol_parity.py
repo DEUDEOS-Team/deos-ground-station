@@ -34,7 +34,11 @@ from deos_core import (  # noqa: E402
     BrakeStatusPayload,
     BrakeTargetPayload,
     ConfigCommand,
+    DEOS_INTERVAL_ON_CHANGE,
+    DEOS_VERSION,
     DiagnosticFaultPayload,
+    GLOBAL_FAULTS,
+    GlobalFaultId,
     HeartbeatPayload,
     LightingStatusPayload,
     NodeId,
@@ -58,8 +62,9 @@ from deos_core import (  # noqa: E402
     TractionTorqueLimitPayload,
     UniversalDeosFrame,
     UnsubscribeReqPayload,
-    DEOS_INTERVAL_ON_CHANGE,
+    c_fault_name,
 )
+from deos_core.c_bridge import DEOS_PROTOCOL_VERSION as C_BRIDGE_PROTOCOL_VERSION  # noqa: E402
 from deos_core.models import CommandRequest  # noqa: E402
 
 
@@ -209,6 +214,35 @@ int main(void) {
             "deos_lighting_status_payload": LightingStatusPayload,
         }
         self.assertEqual(c_struct_names, set(struct_mapping.keys()))
+
+    def test_version_and_global_fault_ssot_parity(self):
+        icd_text = (SUBMODULE_INC / "deos" / "deos_icd.h").read_text(encoding="utf-8")
+
+        ver_match = re.search(r"#define\s+DEOS_PROTOCOL_VERSION\s+(0x[0-9A-Fa-f]+|\d+)", icd_text)
+        self.assertIsNotNone(ver_match)
+        c_proto_version = int(ver_match.group(1), 0)
+        self.assertEqual(DEOS_VERSION, c_proto_version)
+        self.assertEqual(C_BRIDGE_PROTOCOL_VERSION, c_proto_version)
+
+        fault_block = re.search(r"typedef enum\s*\{(.*?)\}\s*deos_fault_id_t;", icd_text, re.S)
+        self.assertIsNotNone(fault_block)
+        c_fault_vals = {
+            int(m.group(2), 0)
+            for m in re.finditer(r"(DEOS_FAULT_\w+)\s*=\s*(0x[0-9A-Fa-f]+|\d+)", fault_block.group(1))
+        }
+        self.assertGreater(len(c_fault_vals), 0)
+
+        py_fault_vals = {int(f) for f in GlobalFaultId}
+        self.assertTrue(
+            c_fault_vals.issubset(py_fault_vals),
+            f"Missing GlobalFaultIds: {[hex(x) for x in sorted(c_fault_vals - py_fault_vals)]}",
+        )
+        self.assertTrue(
+            c_fault_vals.issubset(set(GLOBAL_FAULTS.keys())),
+            f"Missing GLOBAL_FAULTS entries: {[hex(x) for x in sorted(c_fault_vals - set(GLOBAL_FAULTS.keys()))]}",
+        )
+        for fid in sorted(c_fault_vals):
+            self.assertNotEqual(c_fault_name(fid), "UNKNOWN_FAULT", f"deos_fault_name missing 0x{fid:04X}")
 
     def test_bidirectional_wire_parity_c_producer_to_python_decoder_and_linker(self):
         c_producer = r"""

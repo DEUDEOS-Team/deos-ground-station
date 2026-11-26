@@ -23,7 +23,7 @@ class TestFraming(unittest.TestCase):
             destination=0x10,
             source=0x02,
             priority=0x02,
-            version=0x11,
+            version=0x12,
             message_class=0x01,
             service=0x01,
             command=0x01,
@@ -36,7 +36,7 @@ class TestFraming(unittest.TestCase):
         self.assertEqual(encoded[0], 0x10)  # dest
         self.assertEqual(encoded[1], 0x02)  # src
         self.assertEqual(encoded[2], 0x02)  # prio
-        self.assertEqual(encoded[3], 0x11)  # version
+        self.assertEqual(encoded[3], 0x12)  # version
         self.assertEqual(encoded[4], 0x01)  # class
         self.assertEqual(encoded[5], 0x01)  # service
         self.assertEqual(encoded[6], 0x01)  # command
@@ -61,7 +61,7 @@ class TestFraming(unittest.TestCase):
             destination=0x03,
             source=0x02,
             priority=0x01,
-            version=0x11,
+            version=0x12,
             message_class=0x01,
             service=0x00,
             command=0x02,
@@ -79,18 +79,20 @@ class TestFraming(unittest.TestCase):
         with self.assertRaises(ValueError):
             bad_frame.encode(layout="UNIVERSAL_9B")
 
-        # Truncated header or truncated payload rejected by C decoder
+        # Truncated header, truncated payload, or wrong v1.1 version rejected by C decoder
         with self.assertRaises(ValueError):
-            UniversalDeosFrame.decode(b"\x03\x02\x01\x11\x01\x00\x02\x07", layout="UNIVERSAL_9B")
+            UniversalDeosFrame.decode(b"\x03\x02\x01\x12\x01\x00\x02\x07", layout="UNIVERSAL_9B")
         with self.assertRaises(ValueError):
-            UniversalDeosFrame.decode(b"\x03\x02\x01\x11\x01\x00\x02\x07\x04\x01", layout="UNIVERSAL_9B")
+            UniversalDeosFrame.decode(b"\x03\x02\x01\x12\x01\x00\x02\x07\x04\x01", layout="UNIVERSAL_9B")
+        with self.assertRaises(ValueError):
+            UniversalDeosFrame.decode(b"\x03\x02\x01\x11\x01\x00\x02\x07\x01\x05", layout="UNIVERSAL_9B")
 
     def test_common_8b_symmetry(self):
         frame = UniversalDeosFrame(
             destination=0x03,
             source=0x02,
             priority=0x05,
-            version=0x11,
+            version=0x12,
             message_class=0x07,
             service=0x00,
             command=0x08,
@@ -105,7 +107,7 @@ class TestFraming(unittest.TestCase):
         self.assertEqual(encoded[2], 0x00)
         self.assertEqual(encoded[3], 0x03)
         self.assertEqual(encoded[4], 0x02)
-        self.assertEqual(encoded[5], 0x11)
+        self.assertEqual(encoded[5], 0x12)
         self.assertEqual(encoded[6], 10)
         self.assertEqual(encoded[7], 0x08)
         self.assertEqual(encoded[8:], b"\xAA\xBB\xCC\xDD")
@@ -119,7 +121,7 @@ class TestFraming(unittest.TestCase):
         self.assertEqual(decoded.payload, frame.payload)
 
     def test_lora_l2_wrap_and_unwrap(self):
-        deos_frame = b"\x10\x02\x02\x11\x01\x01\x01\x05\x02\xAA\xBB"
+        deos_frame = b"\x10\x02\x02\x12\x01\x01\x01\x05\x02\xAA\xBB"
         wire_packet = wrap_lora_packet(LoraFlag.ACK_REQ, deos_frame)
 
         # Wire packet structure: AA 55 Flag Length Payload CRC16 (2B LE)

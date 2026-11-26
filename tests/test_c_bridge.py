@@ -21,6 +21,8 @@ from deos_core import (  # noqa: E402
     c_command_name,
     c_decode_frame,
     c_encode_frame,
+    c_fault_name,
+    c_fault_severity_name,
     c_node_name,
     c_service_name,
     c_transport_name,
@@ -121,7 +123,7 @@ int main(void) {
             self.assertEqual(decoded.destination, int(dest))
             self.assertEqual(decoded.source, int(src))
             self.assertEqual(decoded.priority, int(prio))
-            self.assertEqual(decoded.version, 0x11)
+            self.assertEqual(decoded.version, 0x12)
             self.assertEqual(decoded.message_class, int(mcls))
             self.assertEqual(decoded.service, int(srv))
             self.assertEqual(decoded.command, int(cmd))
@@ -132,7 +134,15 @@ int main(void) {
         with self.assertRaises(ValueError):
             c_encode_frame(0x03, 0x02, 1, 1, 0, 2, 0, b"x" * (DEOS_MAX_PAYLOAD_LEN + 1))
 
-        for bad_buf in (b"", b"\x03\x02\x01\x11\x01\x00\x02\x00", b"\x03\x02\x01\x11\x01\x00\x02\x00\x05\x01\x02"):
+        # Empty, short header, truncated payload, old v1.1 version, oversized payload len, and trailing bytes
+        bad_frames = (
+            b"",
+            b"\x03\x02\x01\x12\x01\x00\x02\x00",
+            b"\x03\x02\x01\x12\x01\x00\x02\x00\x05\x01\x02",
+            b"\x03\x02\x01\x11\x01\x00\x02\x00\x01\x05",  # v1.1 rejected by v1.2 decoder
+            b"\x03\x02\x01\x12\x01\x00\x02\x00\x01\x05\xAA",  # trailing byte rejected
+        )
+        for bad_buf in bad_frames:
             with self.assertRaises(ValueError):
                 c_decode_frame(bad_buf)
 
@@ -151,13 +161,24 @@ int main(void) {
 
         self.assertEqual(c_command_name(0x00, 0x02), "SET_STATE")
         self.assertEqual(c_command_name(0x01, 0x01), "SET_TARGET_SPEED")
-        self.assertEqual(c_command_name(0x07, 0x01), "SENSOR_IMU_DATA")
+        self.assertEqual(c_command_name(0x07, 0x01), "IMU_DATA")
         self.assertEqual(c_command_name(0x02, 0xE1), "SET_PARAMETER")
         self.assertEqual(c_command_name(0x01, 0xE0), "GET_PARAMETER")
         self.assertEqual(c_command_name(0x00, 0xEE), "UNKNOWN_CMD")
 
         self.assertEqual(c_transport_name(4), "UART_LORA")
         self.assertEqual(c_transport_name(0xEE), "UNKNOWN_TRP")
+
+        self.assertEqual(c_fault_name(0x0045), "CAN_TX_SEND_FAILED")
+        self.assertEqual(c_fault_name(0x0400), "BMS_PACK_OVERVOLTAGE")
+        self.assertEqual(c_fault_name(0x0500), "GW_MAIN_COMM_LOST")
+        self.assertEqual(c_fault_name(0xFFFF), "UNKNOWN_FAULT")
+
+        self.assertEqual(c_fault_severity_name(1), "INFO")
+        self.assertEqual(c_fault_severity_name(2), "WARNING")
+        self.assertEqual(c_fault_severity_name(3), "ERROR")
+        self.assertEqual(c_fault_severity_name(4), "CRITICAL")
+        self.assertEqual(c_fault_severity_name(0xEE), "UNKNOWN_SEV")
 
     def test_little_endian_c_codec_helpers(self):
         for val in (0, 1, 0x1234, 65535):
@@ -200,6 +221,15 @@ int main(void) {
     def test_c_callback_registry_dispatch_and_unregister(self):
         reg = DeosCallbackRegistry()
         received = []
+
+        with self.assertRaises(ValueError):
+            reg.register(
+                MessageClass.COMMAND,
+                ServiceId.SYSTEM,
+                SystemCommand.SET_STATE,
+                lambda frame: received.append((frame.destination, frame.payload)),
+                local_node=NodeId.INVALID,
+            )
 
         reg.register(
             MessageClass.COMMAND,

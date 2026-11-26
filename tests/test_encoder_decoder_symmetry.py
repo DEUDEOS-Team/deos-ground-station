@@ -130,7 +130,7 @@ class TestEncoderDecoderSymmetry(unittest.TestCase):
             0x00,       # result_code SUCCESS
             0x03,       # node_id MAIN_STM32
             0x01,       # hw_type STM32H5
-            0x11,       # proto_version v1.1
+            0x12,       # proto_version v1.2
             1, 2, 0,    # fw 1.2.0
             0,          # reserved
             0xABCD1234,# git_hash
@@ -284,6 +284,37 @@ class TestEncoderDecoderSymmetry(unittest.TestCase):
         self.assertEqual(ev_end[0]["type"], "faults_complete")
         self.assertEqual(ev_end[0]["total_faults"], 1)
         self.assertEqual(ev_end[0]["faults"][0]["fault_id"], 0x0100)
+
+        # Global SSOT faults: BMS (0x0400) & BMS Gateway (0x0500)
+        decoder_mod.faults_acc[NodeId.BMS_MAIN].clear()
+        g_bms = UniversalDeosFrame(
+            destination=NodeId.GROUND_CONTROL,
+            source=NodeId.BMS_MAIN,
+            priority=0x03,
+            message_class=0x05,
+            service=ServiceId.DIAGNOSTIC,
+            command=DiagnosticCommand.GET_FAULTS,
+            sequence=22,
+            payload=struct.pack("<HBBHI", 0x0400, 4, 1, 2, 7500),
+        )
+        ev_gbms = decoder_mod.decode_diagnostic(g_bms)
+        self.assertEqual(ev_gbms[0]["fault"]["name"], "BMS_PACK_OVERVOLTAGE")
+        self.assertEqual(ev_gbms[0]["fault"]["severity_name"], "CRITICAL")
+
+        decoder_mod.faults_acc[NodeId.BMS_GATEWAY].clear()
+        g_gw = UniversalDeosFrame(
+            destination=NodeId.GROUND_CONTROL,
+            source=NodeId.BMS_GATEWAY,
+            priority=0x03,
+            message_class=0x05,
+            service=ServiceId.DIAGNOSTIC,
+            command=DiagnosticCommand.GET_FAULTS,
+            sequence=23,
+            payload=struct.pack("<HBBHI", 0x0500, 4, 1, 1, 9000),
+        )
+        ev_ggw = decoder_mod.decode_diagnostic(g_gw)
+        self.assertEqual(ev_ggw[0]["fault"]["name"], "GW_MAIN_COMM_LOST")
+        self.assertEqual(ev_ggw[0]["fault"]["severity_name"], "CRITICAL")
 
     def test_steering_and_brake_symmetry(self):
         # Steering command with target_angular_velocity

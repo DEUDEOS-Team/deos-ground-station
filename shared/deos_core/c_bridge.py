@@ -16,7 +16,7 @@ logger = logging.getLogger("deos.c_bridge")
 
 # Constants matching deos-protocol/include/deos/{deos_icd.h,deos_types.h,deos_frame.h,deos_registry.h}
 DEOS_UNIVERSAL_HEADER_SIZE = 9
-DEOS_PROTOCOL_VERSION = 0x11
+DEOS_PROTOCOL_VERSION = 0x12
 DEOS_MAX_PAYLOAD_LEN = 60
 DEOS_MAX_REGISTRY_HANDLERS = 32
 
@@ -164,6 +164,15 @@ def _configure_signatures(lib: ctypes.CDLL) -> ctypes.CDLL:
     lib.deos_command_name.argtypes = [ctypes.c_uint8, ctypes.c_uint8]
     lib.deos_command_name.restype = ctypes.c_char_p
 
+    lib.deos_fault_name.argtypes = [ctypes.c_uint16]
+    lib.deos_fault_name.restype = ctypes.c_char_p
+
+    lib.deos_fault_severity_name.argtypes = [ctypes.c_uint]
+    lib.deos_fault_severity_name.restype = ctypes.c_char_p
+
+    lib.deos_registry_sizeof.argtypes = []
+    lib.deos_registry_sizeof.restype = ctypes.c_size_t
+
     lib.deos_registry_init.argtypes = [reg_ptr]
     lib.deos_registry_init.restype = ctypes.c_int
 
@@ -177,16 +186,6 @@ def _configure_signatures(lib: ctypes.CDLL) -> ctypes.CDLL:
         ctypes.c_void_p,
     ]
     lib.deos_registry_register_for_node.restype = ctypes.c_int
-
-    lib.deos_registry_register.argtypes = [
-        reg_ptr,
-        ctypes.c_uint,
-        ctypes.c_uint,
-        ctypes.c_uint8,
-        C_HANDLER_TYPE,
-        ctypes.c_void_p,
-    ]
-    lib.deos_registry_register.restype = ctypes.c_int
 
     lib.deos_registry_unregister.argtypes = [
         reg_ptr,
@@ -421,16 +420,23 @@ _ICD_PARAM_CMD_NAMES = {
 
 
 def c_command_name(service_id: int, command_id: int) -> str:
-    """Return official C command name string, falling back to `deos_icd.h` for SENSORS/PARAM commands."""
+    """Return official C command name string, falling back to `deos_icd.h` for PARAM commands."""
     srv = service_id & 0xFF
     cmd = command_id & 0xFF
     name = get_lib().deos_command_name(srv, cmd).decode("utf-8")
-    if name == "UNKNOWN_CMD":
-        if cmd in _ICD_PARAM_CMD_NAMES:
-            return _ICD_PARAM_CMD_NAMES[cmd]
-        if (srv, cmd) == (0x07, 0x01):
-            return "SENSOR_IMU_DATA"
+    if name == "UNKNOWN_CMD" and cmd in _ICD_PARAM_CMD_NAMES:
+        return _ICD_PARAM_CMD_NAMES[cmd]
     return name
+
+
+def c_fault_name(fault_id: int) -> str:
+    """Return official C fault name string for `fault_id`."""
+    return get_lib().deos_fault_name(int(fault_id) & 0xFFFF).decode("utf-8")
+
+
+def c_fault_severity_name(severity: int) -> str:
+    """Return official C fault severity string for `severity`."""
+    return get_lib().deos_fault_severity_name(int(severity) & 0xFF).decode("utf-8")
 
 
 def _extract_codec_slice(
@@ -514,6 +520,11 @@ class DeosCallbackRegistry:
 
     def __init__(self) -> None:
         self._lib = get_lib()
+        expected_size = int(self._lib.deos_registry_sizeof())
+        if expected_size != ctypes.sizeof(CDeosRegistry):
+            raise RuntimeError(
+                f"CDeosRegistry ABI size mismatch: Python={ctypes.sizeof(CDeosRegistry)}, C={expected_size}"
+            )
         self._reg = CDeosRegistry()
         rc = self._lib.deos_registry_init(ctypes.byref(self._reg))
         if rc != 0:
