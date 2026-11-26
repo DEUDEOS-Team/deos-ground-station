@@ -21,6 +21,9 @@ share/python-wheels/
 *.egg
 MANIFEST
 
+Arsivleme_Sablon.tex
+DEOS_GROUND_STATION_REPORT.tex
+BLUEPRINT_GROUND_STATION_REPORT.tex
 .env
 .venv
 env/
